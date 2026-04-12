@@ -8,7 +8,7 @@ from sqlalchemy.pool import StaticPool
 from app.config import get_settings
 from app.db import get_db
 from app.main import app
-from app.models import AuditEvent, Recommendation, SourceChunk, SourceDocument, Task
+from app.models import AuditEvent, Recommendation, SourceChunk, SourceDocument, Task, TaskUpdate
 
 
 def test_embed_retrieve_and_recommendation_routes(tmp_path) -> None:  # type: ignore[no-untyped-def]
@@ -21,6 +21,7 @@ def test_embed_retrieve_and_recommendation_routes(tmp_path) -> None:  # type: ig
     SourceDocument.__table__.create(bind=engine)
     SourceChunk.__table__.create(bind=engine)
     Task.__table__.create(bind=engine)
+    TaskUpdate.__table__.create(bind=engine)
     Recommendation.__table__.create(bind=engine)
     AuditEvent.__table__.create(bind=engine)
 

@@ -6,6 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     app_env: str = "local"
+    app_version: str = "dev"
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     database_url: str = "postgresql://postgres:postgres@localhost:5432/mission_control"

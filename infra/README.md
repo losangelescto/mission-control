@@ -10,8 +10,9 @@ infra/
 ├── azure/
 │   ├── acr-setup.sh             # Azure Container Registry
 │   ├── keyvault-setup.sh        # Key Vault + managed identity
-│   ├── container-apps-setup.sh  # Production Container Apps environment
-│   └── staging-setup.sh         # Staging environment (shares ACR/KV)
+│   ├── container-apps-setup.sh  # Production Container Apps environment (with health probes)
+│   ├── staging-setup.sh         # Staging environment (shares ACR/KV)
+│   └── monitoring-setup.sh      # Log Analytics workspace + alert rules
 └── postgres/
     └── init.sql                 # Local Postgres init (docker-compose)
 ```
@@ -44,6 +45,9 @@ cd infra/azure
 
 # 4. Staging Container Apps environment + mc-api-staging + mc-web-staging
 ./staging-setup.sh
+
+# 5. Log Analytics + alert rules (run after container-apps-setup.sh)
+./monitoring-setup.sh
 ```
 
 ## Configuration

@@ -1,4 +1,5 @@
-from datetime import datetime
+import time
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session
@@ -18,6 +19,7 @@ from app.schemas import (
     CanonHistoryResponse,
     CanonRegisterRequest,
     HealthResponse,
+    InfoResponse,
     RecurrenceSpawnResponse,
     RecurrenceTemplateCreate,
     RecurrenceTemplateResponse,
@@ -117,10 +119,12 @@ from app.services import (
 
 router = APIRouter()
 
+_STARTUP_MONOTONIC = time.monotonic()
+
 
 @router.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
-    return HealthResponse(status="ok")
+    return HealthResponse(status="ok", timestamp=datetime.now(timezone.utc))
 
 
 @router.get("/ready", response_model=ReadyResponse)
@@ -128,9 +132,19 @@ def ready(db: Session = Depends(get_db)) -> ReadyResponse:
     if not get_readiness(db):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="database not ready",
+            detail={"status": "not_ready", "database": "disconnected"},
         )
-    return ReadyResponse(status="ready")
+    return ReadyResponse(status="ready", database="connected")
+
+
+@router.get("/info", response_model=InfoResponse)
+def info() -> InfoResponse:
+    settings = get_settings()
+    return InfoResponse(
+        version=settings.app_version,
+        environment=settings.app_env,
+        uptime_seconds=round(time.monotonic() - _STARTUP_MONOTONIC, 3),
+    )
 
 
 @router.post("/tasks", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)

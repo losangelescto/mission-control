@@ -89,6 +89,62 @@ grant_acr_pull_to_identity() {
     --output none 2>/dev/null || true
 }
 
+# Inject liveness and readiness HTTP probes into an existing container app.
+# Container Apps exposes probes through the full template spec, not CLI flags,
+# so we read the current definition as JSON, add the probes block on every
+# container, and re-apply. Idempotent — safe to run on an app that already
+# has probes configured.
+# Usage: configure_probes <app_name> <port>
+configure_probes() {
+  local app_name="$1"
+  local port="$2"
+  local tmp_spec
+  tmp_spec=$(mktemp)
+  # shellcheck disable=SC2064
+  trap "rm -f $tmp_spec" RETURN
+
+  az containerapp show \
+    --name "$app_name" \
+    --resource-group "$RESOURCE_GROUP" \
+    --output json \
+    | python3 - "$port" > "$tmp_spec" <<'PY'
+import json, sys
+port = int(sys.argv[1])
+spec = json.load(sys.stdin)
+probes = [
+    {
+        "type": "Liveness",
+        "httpGet": {"path": "/health", "port": port, "scheme": "HTTP"},
+        "periodSeconds": 30,
+        "timeoutSeconds": 5,
+        "failureThreshold": 3,
+        "initialDelaySeconds": 10,
+    },
+    {
+        "type": "Readiness",
+        "httpGet": {"path": "/ready", "port": port, "scheme": "HTTP"},
+        "periodSeconds": 10,
+        "timeoutSeconds": 5,
+        "failureThreshold": 5,
+        "initialDelaySeconds": 5,
+    },
+]
+for container in spec["properties"]["template"]["containers"]:
+    container["probes"] = probes
+# Strip read-only / system fields that --yaml rejects.
+for key in ("id", "name", "type", "systemData"):
+    spec.pop(key, None)
+json.dump(spec, sys.stdout)
+PY
+
+  echo "Applying probes to $app_name..."
+  az containerapp update \
+    --name "$app_name" \
+    --resource-group "$RESOURCE_GROUP" \
+    --yaml "$tmp_spec" \
+    --output none
+}
+
 # Usage: deploy_app <app_name> <image_repo> <port> <cpu> <memory> <min> <max>
 deploy_app() {
   local app_name="$1"
@@ -118,6 +174,7 @@ deploy_app() {
       --min-replicas "$min_replicas" \
       --max-replicas "$max_replicas" \
       --output none
+    configure_probes "$app_name" "$port"
     return
   fi
 
@@ -143,6 +200,7 @@ deploy_app() {
       "DATABASE_URL=secretref:database-url" \
       "LLM_API_KEY=secretref:llm-api-key" \
     --output none
+  configure_probes "$app_name" "$port"
 }
 
 print_fqdn() {

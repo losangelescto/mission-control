@@ -6,10 +6,18 @@ from pydantic import BaseModel, ConfigDict
 
 class HealthResponse(BaseModel):
     status: str
+    timestamp: datetime
 
 
 class ReadyResponse(BaseModel):
     status: str
+    database: str
+
+
+class InfoResponse(BaseModel):
+    version: str
+    environment: str
+    uptime_seconds: float
 
 
 class ErrorResponse(BaseModel):

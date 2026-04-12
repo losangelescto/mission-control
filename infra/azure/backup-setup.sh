@@ -45,18 +45,31 @@ configure_retention() {
     --resource-group "$RESOURCE_GROUP" \
     --query "backup.geoRedundantBackup" -o tsv)
 
-  if [[ "$current_retention" == "$BACKUP_RETENTION_DAYS" && "$current_geo" == "$GEO_REDUNDANT_BACKUP" ]]; then
-    echo "Backup config already matches desired state — skipping"
-    return
+  if [[ "$current_retention" == "$BACKUP_RETENTION_DAYS" ]]; then
+    echo "Retention already set to $BACKUP_RETENTION_DAYS days — skipping"
+  else
+    echo "Updating backup retention to $BACKUP_RETENTION_DAYS days..."
+    az postgres flexible-server update \
+      --name "$POSTGRES_SERVER" \
+      --resource-group "$RESOURCE_GROUP" \
+      --backup-retention "$BACKUP_RETENTION_DAYS" \
+      --output none
   fi
 
-  echo "Updating backup config (retention=$BACKUP_RETENTION_DAYS, geo=$GEO_REDUNDANT_BACKUP)..."
-  az postgres flexible-server update \
-    --name "$POSTGRES_SERVER" \
-    --resource-group "$RESOURCE_GROUP" \
-    --backup-retention "$BACKUP_RETENTION_DAYS" \
-    --geo-redundant-backup "$GEO_REDUNDANT_BACKUP" \
-    --output none
+  # Geo-redundant backup is only configurable at server creation time for
+  # Flexible Server; it cannot be changed on an existing server. If it
+  # does not already match, flag it clearly — the operator must provision
+  # a new server with --geo-redundant-backup Enabled and migrate data.
+  if [[ "$current_geo" != "$GEO_REDUNDANT_BACKUP" ]]; then
+    echo ""
+    echo "WARNING: geo-redundant backup is '$current_geo' on $POSTGRES_SERVER;"
+    echo "         the desired state is '$GEO_REDUNDANT_BACKUP'."
+    echo "         This setting is immutable post-creation. To enable geo-"
+    echo "         redundancy, provision a new Flexible Server with"
+    echo "         '--geo-redundant-backup Enabled' and restore the database"
+    echo "         into it from a point-in-time backup."
+    echo ""
+  fi
 }
 
 print_status() {

@@ -94,10 +94,14 @@ grant_acr_pull_to_identity() {
 # so we read the current definition as JSON, add the probes block on every
 # container, and re-apply. Idempotent — safe to run on an app that already
 # has probes configured.
-# Usage: configure_probes <app_name> <port>
+# Usage: configure_probes <app_name> <port> [<probe_path>]
+# The optional third argument is the HTTP path both probes hit; default
+# is /health for /ready (the API pattern). Callers that front a Next.js
+# app should pass "/" because Next.js does not expose /health.
 configure_probes() {
   local app_name="$1"
   local port="$2"
+  local probe_path="${3:-/health}"
   local tmp_spec
   tmp_spec=$(mktemp)
   # shellcheck disable=SC2064
@@ -107,14 +111,15 @@ configure_probes() {
     --name "$app_name" \
     --resource-group "$RESOURCE_GROUP" \
     --output json \
-    | python3 - "$port" > "$tmp_spec" <<'PY'
+    | python3 -c '
 import json, sys
 port = int(sys.argv[1])
+probe_path = sys.argv[2]
 spec = json.load(sys.stdin)
 probes = [
     {
         "type": "Liveness",
-        "httpGet": {"path": "/health", "port": port, "scheme": "HTTP"},
+        "httpGet": {"path": probe_path, "port": port, "scheme": "HTTP"},
         "periodSeconds": 30,
         "timeoutSeconds": 5,
         "failureThreshold": 3,
@@ -122,7 +127,7 @@ probes = [
     },
     {
         "type": "Readiness",
-        "httpGet": {"path": "/ready", "port": port, "scheme": "HTTP"},
+        "httpGet": {"path": probe_path, "port": port, "scheme": "HTTP"},
         "periodSeconds": 10,
         "timeoutSeconds": 5,
         "failureThreshold": 5,
@@ -135,7 +140,7 @@ for container in spec["properties"]["template"]["containers"]:
 for key in ("id", "name", "type", "systemData"):
     spec.pop(key, None)
 json.dump(spec, sys.stdout)
-PY
+' "$port" "$probe_path" > "$tmp_spec"
 
   echo "Applying probes to $app_name..."
   az containerapp update \
@@ -145,7 +150,7 @@ PY
     --output none
 }
 
-# Usage: deploy_app <app_name> <image_repo> <port> <cpu> <memory> <min> <max>
+# Usage: deploy_app <app_name> <image_repo> <port> <cpu> <memory> <min> <max> <probe_path>
 deploy_app() {
   local app_name="$1"
   local image_repo="$2"
@@ -154,6 +159,7 @@ deploy_app() {
   local memory="$5"
   local min_replicas="$6"
   local max_replicas="$7"
+  local probe_path="${8:-/health}"
 
   local identity_id acr_login kv_uri
   identity_id=$(az identity show --name "$IDENTITY_NAME" --resource-group "$RESOURCE_GROUP" --query id -o tsv)
@@ -174,7 +180,7 @@ deploy_app() {
       --min-replicas "$min_replicas" \
       --max-replicas "$max_replicas" \
       --output none
-    configure_probes "$app_name" "$port"
+    configure_probes "$app_name" "$port" "$probe_path"
     return
   fi
 
@@ -200,7 +206,7 @@ deploy_app() {
       "DATABASE_URL=secretref:database-url" \
       "LLM_API_KEY=secretref:llm-api-key" \
     --output none
-  configure_probes "$app_name" "$port"
+  configure_probes "$app_name" "$port" "$probe_path"
 }
 
 print_fqdn() {
@@ -217,10 +223,10 @@ main() {
   grant_acr_pull_to_identity
 
   deploy_app "$API_APP_NAME" "mission-control-api:$API_IMAGE_TAG" 8000 \
-    "$API_CPU" "$API_MEMORY" "$API_MIN_REPLICAS" "$API_MAX_REPLICAS"
+    "$API_CPU" "$API_MEMORY" "$API_MIN_REPLICAS" "$API_MAX_REPLICAS" "/health"
 
   deploy_app "$WEB_APP_NAME" "mission-control-web:$WEB_IMAGE_TAG" 3000 \
-    "$WEB_CPU" "$WEB_MEMORY" "$WEB_MIN_REPLICAS" "$WEB_MAX_REPLICAS"
+    "$WEB_CPU" "$WEB_MEMORY" "$WEB_MIN_REPLICAS" "$WEB_MAX_REPLICAS" "/"
 
   echo ""
   echo "Container apps ready."

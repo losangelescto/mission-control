@@ -1,10 +1,11 @@
 import time
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.security import limiter
 from app.deps import get_call_extraction_extractor, get_mail_extraction_extractor
 from app.db import get_db
 from app.mailbox.service import (
@@ -443,7 +444,12 @@ def retrieve_search_route(payload: RetrieveSearchRequest, db: Session = Depends(
 
 
 @router.post("/tasks/{task_id}/recommendation", response_model=RecommendationResponse)
-def generate_recommendation_route(task_id: int, db: Session = Depends(get_db)) -> RecommendationResponse:
+@limiter.limit(lambda: get_settings().rate_limit_recommendation)
+def generate_recommendation_route(
+    request: Request,
+    task_id: int,
+    db: Session = Depends(get_db),
+) -> RecommendationResponse:
     recommendation = generate_task_recommendation(db, task_id=task_id)
     if recommendation is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="task not found")

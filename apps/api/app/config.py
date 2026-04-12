@@ -13,6 +13,14 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     sources_upload_dir: str = "data/uploads"
 
+    # Comma-separated list of allowed origins for CORS. No wildcard in prod.
+    cors_origins: str = "http://localhost:3000"
+
+    # Rate limits. Format accepted by slowapi: "<count>/<period>"
+    rate_limit_default: str = "100/minute"
+    rate_limit_recommendation: str = "10/minute"
+    rate_limit_enabled: bool = True
+
     # --- Phase 1 POC feature flags (handoff for live integrations) ---
     use_fixture_mailbox: bool = Field(
         default=True,

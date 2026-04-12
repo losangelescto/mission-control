@@ -7,6 +7,7 @@ from app.api.routes import router as system_router
 from app.config import get_settings
 from app.logging_setup import configure_logging
 from app.middleware import add_error_middleware
+from app.security import add_security_middleware
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,9 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     configure_logging()
+    settings = get_settings()
     app = FastAPI(title="Mission Control API", lifespan=lifespan)
+    add_security_middleware(app, settings)
     add_error_middleware(app)
     app.include_router(system_router)
     return app

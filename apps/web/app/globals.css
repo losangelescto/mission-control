@@ -1,0 +1,921 @@
+/* ═══════════════════════════════════════════════════════════
+   MISSION CONTROL — ELEGANT OPERATIONAL THEME
+   Light-first. Readable. System font stack.
+   ═══════════════════════════════════════════════════════════ */
+
+/* ─── Font stacks ───────────────────────────────────────── */
+:root {
+  --font-heading: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-body:    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* ─── Light theme base ───────────────────────────────────── */
+:root {
+  color-scheme: light;
+
+  /* Surfaces */
+  --bg-base:     #FFFFFF;
+  --bg-surface:  #F8F8F8;
+  --bg-elevated: #F8F8F8;
+  --bg-input:    #F8F8F8;
+  --bg-hover:    rgba(0, 0, 0, 0.03);
+
+  /* Text */
+  --text-primary:   #1A1A1A;
+  --text-secondary: #4A4A4A;
+  --text-tertiary:  #6A6A6A;
+
+  /* Borders */
+  --border:       #E0E0E0;
+  --border-strong: #D0D0D0;
+  --border-input: #D0D0D0;
+
+  /* Navigation */
+  --topbar-bg:     #FFFFFF;
+  --topbar-border: #E0E0E0;
+
+  /* Semantic — light (slightly darkened for contrast on white) */
+  --green:        #16A34A;
+  --green-hover:  #17B84F;
+  --green-active: #138040;
+  --green-dim:    rgba(22, 163, 74, 0.10);
+  --red:         #DC2626;
+  --red-dim:     rgba(220, 38, 38, 0.08);
+  --yellow:      #CA8A04;
+  --yellow-dim:  rgba(202, 138, 4, 0.10);
+  --cyan:        #0891B2;
+  --cyan-dim:    rgba(8, 145, 178, 0.10);
+  --orange:      #EA580C;
+  --orange-dim:  rgba(234, 88, 12, 0.10);
+
+  /* Focus */
+  --focus-ring: 0 0 0 2px rgba(22, 163, 74, 0.30);
+
+  /* Shadows */
+  --shadow:    0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
+
+  /* Radius */
+  --radius-xs: 4px;
+  --radius-sm: 5px;
+  --radius:    8px;
+  --radius-lg: 10px;
+}
+
+/* ─── Dark theme override ────────────────────────────────── */
+html.dark {
+  color-scheme: dark;
+
+  /* Surfaces — layered, NOT flat black */
+  --bg-base:     #111111;
+  --bg-surface:  #1E1E1E;
+  --bg-elevated: #252525;
+  --bg-input:    #1E1E1E;
+  --bg-hover:    rgba(255, 255, 255, 0.04);
+
+  /* Text */
+  --text-primary:   #F0F0F0;
+  --text-secondary: #B0B0B0;
+  --text-tertiary:  #888888;
+
+  /* Borders */
+  --border:        #333333;
+  --border-strong: #444444;
+  --border-input:  #3A3A3A;
+
+  /* Navigation */
+  --topbar-bg:     #1E1E1E;
+  --topbar-border: #333333;
+
+  /* Semantic — full saturation for dark backgrounds */
+  --green:        #22C55E;
+  --green-hover:  #25D966;
+  --green-active: #1DB050;
+  --green-dim:    rgba(34, 197, 94, 0.14);
+  --red:        #EF4444;
+  --red-dim:    rgba(239, 68, 68, 0.12);
+  --yellow:     #EAB308;
+  --yellow-dim: rgba(234, 179, 8, 0.14);
+  --cyan:       #06B6D4;
+  --cyan-dim:   rgba(6, 182, 212, 0.14);
+  --orange:     #F97316;
+  --orange-dim: rgba(249, 115, 22, 0.14);
+
+  /* Focus — green glow */
+  --focus-ring: 0 0 0 2px rgba(34, 197, 94, 0.35);
+
+  /* Shadows — dark mode uses border+background, not traditional shadows */
+  --shadow:    0 1px 0 rgba(255, 255, 255, 0.03);
+  --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+/* ─── Reset ──────────────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html { height: 100%; }
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+/* ─── Base ───────────────────────────────────────────────── */
+
+body {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  color: var(--text-primary);
+  background: var(--bg-base);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* ─── Typography ─────────────────────────────────────────── */
+
+h1 {
+  font-family: var(--font-heading);
+  font-size: 1.75rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.3;
+  color: var(--text-primary);
+}
+
+h2 {
+  font-family: var(--font-heading);
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+h3 {
+  font-family: var(--font-heading);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  line-height: 1.4;
+}
+
+/* ─── Navigation bar ─────────────────────────────────────── */
+
+.topbar {
+  border-bottom: 1px solid var(--topbar-border);
+  background: var(--topbar-bg);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.topbar-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+/* Brand */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-heading);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  white-space: nowrap;
+  margin-right: 2rem;
+  flex-shrink: 0;
+}
+
+.brand-mark {
+  color: var(--green);
+  font-size: 1rem;
+  line-height: 1;
+}
+
+/* Desktop nav links */
+.nav-desktop {
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  height: 56px;
+  padding: 0 1rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s ease, border-color 0.15s ease;
+  white-space: nowrap;
+}
+
+.nav-link:hover {
+  color: var(--text-primary);
+}
+
+.nav-link-active {
+  color: var(--text-primary);
+  border-bottom-color: var(--green);
+}
+
+/* Hamburger button — hidden on desktop */
+.nav-hamburger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-left: auto;
+  margin-right: 0.5rem;
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.nav-hamburger:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+/* Mobile overlay */
+.nav-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 200;
+}
+
+/* Mobile drawer */
+.nav-drawer {
+  position: fixed;
+  top: 56px;
+  left: 0;
+  right: 0;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  z-index: 201;
+  box-shadow: var(--shadow-md);
+}
+
+.nav-drawer-link {
+  display: flex;
+  align-items: center;
+  height: 52px;
+  padding: 0 1.5rem;
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  border-left: 2px solid transparent;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.nav-drawer-link:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-hover);
+}
+
+.nav-drawer-link-active {
+  color: var(--text-primary);
+  border-left-color: var(--green);
+  background-color: var(--bg-hover);
+}
+
+/* ─── Theme toggle ───────────────────────────────────────── */
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-left: 0.75rem;
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.theme-toggle:hover {
+  color: var(--green);
+  border-color: var(--green);
+  background-color: var(--green-dim);
+}
+
+/* ─── Page layout ────────────────────────────────────────── */
+
+.page-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 1.5rem;
+}
+
+/* ─── Panel / Card ───────────────────────────────────────── */
+
+.panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  min-width: 0;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.panel h1 { margin-bottom: 0.375rem; }
+.panel h2 { margin-bottom: 0.75rem; }
+.panel h3 { margin-bottom: 0.625rem;  }
+
+.panel > p {
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+}
+
+/* ─── Grid & Stack ───────────────────────────────────────── */
+
+.grid {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.grid.cols-2 {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.grid.cols-3 {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.stack-sm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.625rem;
+  margin-top: 1rem;
+}
+
+/* ─── List ───────────────────────────────────────────────── */
+
+.list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  margin-top: 0.25rem;
+}
+
+.list li {
+  border-bottom: 1px solid var(--border);
+  padding: 0.625rem 0;
+  background: transparent;
+  transition: background-color 0.1s ease;
+}
+
+.list li:first-child {
+  padding-top: 0.5rem;
+}
+
+.list li:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.list li:hover {
+  background-color: var(--bg-hover);
+}
+
+.list li a {
+  font-weight: 500;
+  font-size: 1rem;
+  transition: color 0.15s ease;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+
+.list li a:hover {
+  color: var(--green);
+}
+
+/* ─── Typography utilities ───────────────────────────────── */
+
+.small {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+/* Metadata row: vertically centered-left label–value pairs */
+.meta-row {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.mono {
+  font-family: var(--font-mono), 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.875rem;
+}
+
+/* ─── Stat count — large terminal number ─────────────────── */
+
+.stat-count {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 2.5rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
+  line-height: 1;
+  margin-top: 0.625rem;
+}
+
+/* Semantic stat colors via data attribute on panel */
+[data-category="urgent"]          .stat-count { color: var(--orange); }
+[data-category="blocked"]         .stat-count { color: var(--red);    }
+[data-category="stale"]           .stat-count { color: var(--yellow); }
+[data-category="due-soon"]        .stat-count { color: var(--yellow); }
+[data-category="recurring-due"]   .stat-count { color: var(--cyan);   }
+[data-category="candidate-review"].stat-count { color: var(--cyan);   }
+
+/* Semantic section header colors via data attribute on panel */
+[data-section="urgent"]   h2 { color: var(--orange); }
+[data-section="blocked"]  h2 { color: var(--red);    }
+[data-section="stale"]    h2 { color: var(--yellow); }
+[data-section="due-soon"] h2 { color: var(--yellow); }
+
+/* ─── Badge & status pills ───────────────────────────────── */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+  padding: 0.2rem 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  /* Default: green (active canon) */
+  background: var(--green-dim);
+  color: var(--green);
+}
+
+/* Inline status via data-status attribute */
+[data-status] {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+  padding: 0.2rem 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
+[data-status="blocked"]     { background: var(--red-dim);    color: var(--red);    }
+[data-status="urgent"]      { background: var(--orange-dim); color: var(--orange); }
+[data-status="in_progress"] { background: var(--cyan-dim);   color: var(--cyan);   }
+[data-status="up_next"]     { background: var(--yellow-dim); color: var(--yellow); }
+[data-status="completed"]   { background: var(--green-dim);  color: var(--green);  }
+[data-status="backlog"]     { background: var(--bg-hover); color: var(--text-secondary); }
+
+/* ─── Kanban board ──────────────────────────────────────── */
+
+.kanban {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.kanban-col {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.kanban-col-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid var(--border);
+  text-decoration: none;
+  transition: background-color 0.15s ease;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.kanban-col-header:hover {
+  background-color: var(--bg-hover);
+}
+
+.kanban-col-title {
+  font-family: var(--font-heading);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+/* Inherit semantic status colors for column headers */
+[data-status="blocked"]     .kanban-col-title { color: var(--red);    }
+[data-status="in_progress"] .kanban-col-title { color: var(--cyan);   }
+[data-status="up_next"]     .kanban-col-title { color: var(--yellow); }
+[data-status="completed"]   .kanban-col-title { color: var(--green);  }
+
+.kanban-col-count {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  background: var(--bg-hover);
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-sm);
+}
+
+.kanban-col-body {
+  padding: 0.625rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.kanban-empty {
+  font-size: 0.875rem;
+  color: var(--text-tertiary);
+  text-align: center;
+  padding: 1.5rem 0.5rem;
+}
+
+.kanban-card {
+  display: block;
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem 0.875rem;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.kanban-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow);
+}
+
+.kanban-card-title {
+  font-weight: 600;
+  font-size: 0.9375rem;
+  line-height: 1.35;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+}
+
+.kanban-card-desc {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin-bottom: 0.5rem;
+}
+
+.kanban-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.875rem;
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  margin-bottom: 0.375rem;
+}
+
+.kanban-card-label {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.kanban-card-footer {
+  display: flex;
+  gap: 0.375rem;
+  margin-top: 0.25rem;
+}
+
+/* Responsive: stack columns on tablet */
+@media (max-width: 1024px) {
+  .kanban {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .kanban {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ─── Primary button / CTA ───────────────────────────────── */
+
+.link-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  background: var(--green);
+  color: #000;
+  border: none;
+  border-radius: var(--radius);
+  padding: 0.75rem 1.5rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+  /* Ensure min touch target height */
+  min-height: 44px;
+}
+
+.link-btn:hover {
+  background: var(--green-hover);
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.28);
+}
+
+.link-btn:active {
+  background: var(--green-active);
+  box-shadow: none;
+}
+
+/* ─── Form inputs ────────────────────────────────────────── */
+
+input,
+select,
+textarea {
+  display: block;
+  width: 100%;
+  height: 46px;
+  padding: 0 0.875rem;
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius);
+  font-size: 0.9375rem;
+  font-family: inherit;
+  color: var(--text-primary);
+  background: var(--bg-input);
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.2s ease;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--green);
+  box-shadow: var(--focus-ring);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-tertiary);
+}
+
+.task-notes-input {
+  height: auto;
+  padding: 0.625rem 0.875rem;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+/* ─── Details / expandable ───────────────────────────────── */
+
+details {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-top: 0.5rem;
+}
+
+summary {
+  cursor: pointer;
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+  padding: 0.625rem 0.875rem;
+  user-select: none;
+  list-style: none;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+summary:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-hover);
+}
+
+details[open] summary {
+  border-bottom: 1px solid var(--border);
+}
+
+details pre {
+  padding: 0.875rem;
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  overflow: auto;
+  background: var(--bg-base);
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  color: var(--text-secondary);
+}
+
+/* ─── Tables ─────────────────────────────────────────────── */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+thead tr {
+  background: var(--bg-base);
+}
+
+th {
+  text-align: left;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid var(--border-strong);
+  white-space: nowrap;
+}
+
+td {
+  text-align: left;
+  padding: 0.625rem 0.875rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  font-size: 0.9375rem;
+}
+
+/* Monospace for all non-first columns (numbers/data) */
+td:not(:first-child) {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 0.9375rem;
+}
+
+tbody tr {
+  transition: background-color 0.1s ease;
+}
+
+/* Subtle alternating rows */
+tbody tr:nth-child(even) {
+  background-color: var(--bg-hover);
+}
+
+tbody tr:hover {
+  background-color: var(--bg-hover);
+}
+
+tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* ─── Focus ring ─────────────────────────────────────────── */
+
+:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* ─── Responsive — mobile breakpoints ───────────────────── */
+
+/* Tablet: 768px */
+@media (max-width: 768px) {
+  /* Show hamburger, hide desktop nav */
+  .nav-desktop   { display: none; }
+  .nav-hamburger { display: flex; }
+
+  .page-container {
+    padding: 1rem 0.875rem;
+  }
+
+  /* Stack all grids to single column */
+  .grid.cols-2,
+  .grid.cols-3 {
+    grid-template-columns: 1fr;
+  }
+
+  .stat-count {
+    font-size: 2rem;
+  }
+
+  .panel {
+    padding: 1.25rem;
+  }
+
+  /* Tables: scroll horizontally */
+  .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  table {
+    min-width: 560px;
+  }
+
+  .cta-row {
+    flex-direction: column;
+  }
+}
+
+/* Small mobile: 480px */
+@media (max-width: 480px) {
+  /* 2-column mini-grid for stat cards */
+  .grid.cols-3 {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .stat-count {
+    font-size: 1.75rem;
+  }
+
+  .brand {
+    font-size: 0.6875rem;
+    letter-spacing: 0.1em;
+  }
+
+  /* Ensure min 48px touch targets */
+  .link-btn {
+    min-height: 48px;
+    width: 100%;
+    justify-content: center;
+  }
+
+  input,
+  select,
+  textarea {
+    height: 48px;
+  }
+}

@@ -1,0 +1,14 @@
+Meeting — POC call artifact
+============================
+
+Attendees: Jordan, Alex, Taylor
+
+Decisions:
+- Ship internal preview of roll-ups next sprint.
+- No outbound notifications until routing is defined.
+
+Actions:
+- Alex: confirm seed data paths for the demo environment.
+- Taylor: unblock vendor thread after legal returns redlines.
+
+Next meeting: Monday 10:00.

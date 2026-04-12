@@ -1,0 +1,12 @@
+POC Canon Snapshot (Phase 1)
+=============================
+
+Communication standard (excerpt)
+- Use clear subject lines for resident-facing updates.
+- Escalate safety issues within one business day.
+
+Operational cadence
+- Daily checkpoint before noon local time.
+- Weekly review of blocked items with assigner.
+
+This file is a minimal stand-in for a real canon DOCX upload; replace with your org’s active snapshot for demos.

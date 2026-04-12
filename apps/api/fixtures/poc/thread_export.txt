@@ -1,0 +1,11 @@
+Thread export (POC text stand-in)
+=================================
+
+From: ops@example.com
+To: lead@example.com
+Subject: Re: Facility checklist
+
+We still need the vendor sign-off before we can close the checklist item.
+Please follow up by Friday EOD.
+
+— Ops

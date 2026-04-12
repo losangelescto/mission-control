@@ -1,0 +1,6 @@
+/* Globals set appearance:none on all inputs; revert for native select + datetime-local. */
+.select,
+.datetime {
+  appearance: revert;
+  -webkit-appearance: revert;
+}

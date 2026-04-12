@@ -155,3 +155,46 @@ az keyvault purge   -n mc-keyvault
 # Nuke the whole resource group
 az group delete -n mission-control --yes --no-wait
 ```
+
+## Branch Protection Rules
+
+Mission Control uses three long-lived branches. Configure these rules at
+`Settings → Branches` in the GitHub repo after the first push.
+
+### `main`
+
+- Require a pull request before merging
+- Require CI to pass (`CI / lint-and-typecheck`, `CI / test`, `CI / build`)
+- Require **1 approval**
+- Require branches to be up to date before merging
+- Dismiss stale approvals on new commits
+- Restrict who can push (no direct push; all changes via PR)
+- Require linear history
+
+### `staging`
+
+- Require CI to pass
+- Allow direct push for quick iteration (no PR requirement)
+- No approval requirement (fast feedback loop)
+- Automatic deploy via `deploy-staging.yml` on every push
+
+### `production`
+
+- Require a pull request **from `staging` only** (enforce via CODEOWNERS
+  or a required status check)
+- Require CI to pass
+- Require **1 approval** from a repo admin
+- Require branches to be up to date
+- The `deploy-production.yml` workflow also has its own
+  `environment: production` gate, which adds a second required-reviewer
+  check inside the workflow. Configure that under `Settings →
+  Environments → production → Required reviewers`.
+
+### Required status checks (all branches)
+
+Add these as required status checks so CI must pass:
+
+- `CI / lint-and-typecheck`
+- `CI / test`
+- `CI / build`
+

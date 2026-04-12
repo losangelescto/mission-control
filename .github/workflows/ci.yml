@@ -103,6 +103,8 @@ jobs:
 
       - name: Run API tests
         working-directory: apps/api
+        env:
+          PYTHONPATH: ${{ github.workspace }}/apps/api
         run: |
           if [ -d tests ] && compgen -G "tests/test_*.py" > /dev/null; then
             pytest -q

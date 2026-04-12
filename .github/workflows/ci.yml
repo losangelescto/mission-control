@@ -99,7 +99,7 @@ jobs:
         working-directory: apps/api
         run: |
           pip install -r requirements.txt
-          pip install pytest pytest-asyncio httpx
+          pip install pytest pytest-asyncio httpx reportlab
 
       - name: Run API tests
         working-directory: apps/api

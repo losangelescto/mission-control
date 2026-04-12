@@ -19,7 +19,6 @@ from app.mail_email_extraction import (
 )
 from app.mailbox.repository import get_mailbox_source
 from app.models import (
-    Blocker,
     CallArtifact,
     DailyRollup,
     MailboxMessage,

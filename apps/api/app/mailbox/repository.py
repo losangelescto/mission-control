@@ -1,15 +1,15 @@
 from datetime import datetime, timezone
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.models import MailboxMessage, MailboxSource, MailboxSyncState, MailboxThread
+
 
 def _as_utc_aware(dt: datetime) -> datetime:
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc)
-
-from sqlalchemy import select
-from sqlalchemy.orm import Session
-
-from app.models import MailboxMessage, MailboxSource, MailboxSyncState, MailboxThread
 
 
 def get_mailbox_source(

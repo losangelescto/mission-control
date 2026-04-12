@@ -1,7 +1,6 @@
 from datetime import datetime, timezone
 
 from app.config import Settings, get_settings
-from app.mailbox.connector import MailboxConnector
 from app.mailbox.types import MailboxMessageDTO
 
 DEFAULT_FOLDER = "Inbox"

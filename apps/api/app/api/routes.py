@@ -738,7 +738,7 @@ def list_reviews_route(
 
 @router.get("/reviews/cadence-status")
 def cadence_status_route(db: Session = Depends(get_db)) -> list[dict]:
-    from datetime import UTC, timedelta
+    from datetime import UTC
     now = datetime.now(UTC)
     cadences = [
         {"cadence": "daily",     "window_days": 1},

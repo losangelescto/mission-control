@@ -30,7 +30,12 @@ from app.models import (
     TaskCandidate,
     TaskUpdate,
 )
-from app.providers import AIProvider, MockAIProvider, MockEmbeddingsAdapter, EmbeddingsAdapter
+from app.providers import (
+    AIProvider,
+    EmbeddingsAdapter,
+    MockEmbeddingsAdapter,
+    get_ai_provider,
+)
 from app.repositories import (
     check_database_connection,
     create_blocker,
@@ -1167,6 +1172,16 @@ def retrieve_search(
     return scored[:top_k]
 
 
+def _latest_recommendation_for_task(db: Session, task_id: int) -> Recommendation | None:
+    stmt = (
+        select(Recommendation)
+        .where(Recommendation.task_id == task_id)
+        .order_by(Recommendation.created_at.desc())
+        .limit(1)
+    )
+    return db.scalar(stmt)
+
+
 def generate_task_recommendation(
     db: Session,
     task_id: int,
@@ -1181,6 +1196,30 @@ def generate_task_recommendation(
         "recommendation generation started",
         extra={"event": "recommendation_started", "context": {"task_id": task_id}},
     )
+
+    # Short-circuit if a recent recommendation is still fresh AND the task
+    # has not been modified since it was generated. LLM calls are expensive
+    # and noisy — a 5-minute cache is enough to deduplicate rapid retries.
+    cache_seconds = get_settings().recommendation_cache_seconds
+    if cache_seconds > 0:
+        latest = _latest_recommendation_for_task(db, task.id)
+        if latest is not None:
+            age = (datetime.now(UTC) - _as_utc(latest.created_at)).total_seconds()
+            task_updated = _as_utc(task.updated_at)
+            rec_created = _as_utc(latest.created_at)
+            if age < cache_seconds and task_updated <= rec_created:
+                logger.info(
+                    "recommendation cache hit",
+                    extra={
+                        "event": "recommendation_cache_hit",
+                        "context": {
+                            "task_id": task_id,
+                            "recommendation_id": latest.id,
+                            "age_seconds": round(age, 2),
+                        },
+                    },
+                )
+                return latest
 
     # Include recent task updates in the recommendation context.
     recent_updates = repo_list_task_updates(db, task.id)[-10:]
@@ -1217,7 +1256,7 @@ def generate_task_recommendation(
         }
     ]
 
-    provider = ai_provider or MockAIProvider()
+    provider = ai_provider or get_ai_provider()
     draft = provider.generate_recommendation(
         objective=task.objective,
         standard=task.standard,

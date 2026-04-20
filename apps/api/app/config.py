@@ -21,6 +21,17 @@ class Settings(BaseSettings):
     rate_limit_recommendation: str = "10/minute"
     rate_limit_enabled: bool = True
 
+    # --- LLM provider ---
+    # `mock` (default, deterministic, no network), `anthropic`, or `openai`.
+    llm_provider: str = "mock"
+    llm_api_key: str = ""
+    llm_model: str = "claude-sonnet-4-6"
+    llm_max_tokens: int = 1500
+    llm_temperature: float = 0.3
+    # How long a recommendation stays fresh before it may be regenerated.
+    # Only honored if the task itself has not been modified since generation.
+    recommendation_cache_seconds: int = 300
+
     # --- Phase 1 POC feature flags (handoff for live integrations) ---
     use_fixture_mailbox: bool = Field(
         default=True,

@@ -44,7 +44,11 @@ from app.schemas import (
     RetrieveSearchRequest,
     RetrieveSearchResponse,
     RetrievedChunkResponse,
+    RecommendationContextMeta,
+    RecommendationHistoryItem,
     RecommendationResponse,
+    UnblockAlternative,
+    UnblockAnalysis,
     DailyReviewResponse,
     DailyReviewItem,
     DailyRollupPreviewResponse,
@@ -100,6 +104,7 @@ from app.services import (
     list_call_artifacts,
     ingest_source_upload,
     list_task_candidates,
+    list_task_recommendations,
     list_source_documents,
     list_recurrence_templates,
     list_task_updates,
@@ -443,16 +448,27 @@ def retrieve_search_route(payload: RetrieveSearchRequest, db: Session = Depends(
     )
 
 
-@router.post("/tasks/{task_id}/recommendation", response_model=RecommendationResponse)
-@limiter.limit(lambda: get_settings().rate_limit_recommendation)
-def generate_recommendation_route(
-    request: Request,
-    task_id: int,
-    db: Session = Depends(get_db),
-) -> RecommendationResponse:
-    recommendation = generate_task_recommendation(db, task_id=task_id)
-    if recommendation is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="task not found")
+def _recommendation_to_response(recommendation) -> RecommendationResponse:  # type: ignore[no-untyped-def]
+    """Project a Recommendation row into the public response shape.
+
+    The stored row always has the classic columns populated (for backward
+    compatibility with downstream consumers). When ``response_json`` is
+    present we also surface the mode-specific metadata and, for unblock
+    mode, the full analysis object.
+    """
+    response_json = recommendation.response_json or {}
+    meta = response_json.get("recommendation_context")
+    unblock: UnblockAnalysis | None = None
+    if recommendation.recommendation_type == "unblock":
+        unblock = UnblockAnalysis(
+            blocker_summary=response_json.get("blocker_summary", ""),
+            root_cause_analysis=response_json.get("root_cause_analysis", ""),
+            alternatives=[
+                UnblockAlternative(**alt) for alt in response_json.get("alternatives", [])
+            ],
+            recommended_path=response_json.get("recommended_path", ""),
+            canon_reference=response_json.get("canon_reference", ""),
+        )
     return RecommendationResponse(
         id=recommendation.id,
         task_id=recommendation.task_id,
@@ -463,7 +479,45 @@ def generate_recommendation_route(
         next_action=recommendation.next_action,
         source_refs=recommendation.source_refs_json,
         created_at=recommendation.created_at,
+        recommendation_type=recommendation.recommendation_type,
+        recommendation_context=RecommendationContextMeta(**meta) if meta else None,
+        unblock_analysis=unblock,
     )
+
+
+@router.post("/tasks/{task_id}/recommendation", response_model=RecommendationResponse)
+@limiter.limit(lambda: get_settings().rate_limit_recommendation)
+def generate_recommendation_route(
+    request: Request,
+    task_id: int,
+    db: Session = Depends(get_db),
+) -> RecommendationResponse:
+    recommendation = generate_task_recommendation(db, task_id=task_id)
+    if recommendation is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="task not found")
+    return _recommendation_to_response(recommendation)
+
+
+@router.get("/tasks/{task_id}/recommendations", response_model=list[RecommendationHistoryItem])
+def list_task_recommendations_route(
+    task_id: int, db: Session = Depends(get_db)
+) -> list[RecommendationHistoryItem]:
+    task = get_task(db, task_id)
+    if task is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="task not found")
+    rows = list_task_recommendations(db, task_id=task_id, limit=20)
+    return [
+        RecommendationHistoryItem(
+            id=r.id,
+            task_id=r.task_id,
+            recommendation_type=r.recommendation_type,
+            created_at=r.created_at,
+            objective=r.objective,
+            standard=r.standard,
+            next_action=r.next_action,
+        )
+        for r in rows
+    ]
 
 
 @router.get("/review/daily", response_model=DailyReviewResponse)

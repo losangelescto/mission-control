@@ -18,6 +18,25 @@ class RecommendationDraft:
     source_refs: list[dict]
 
 
+@dataclass
+class UnblockDraft:
+    """Structured output when the recommendation engine is in unblock mode.
+
+    Distinct shape from RecommendationDraft — a blocked task gets a
+    root-cause analysis plus three first-principles alternatives, not the
+    standard objective/plan/options/next-action skeleton. Callers that need
+    to persist both modes into the same row should synthesise the standard
+    fields from the recommended alternative (see services layer).
+    """
+
+    blocker_summary: str
+    root_cause_analysis: str
+    alternatives: list[dict]
+    recommended_path: str
+    canon_reference: str
+    source_refs: list[dict]
+
+
 class AIProvider(Protocol):
     def generate_recommendation(
         self,
@@ -26,7 +45,18 @@ class AIProvider(Protocol):
         standard: str,
         task_description: str,
         context_chunks: list[dict],
+        system_prompt: str | None = None,
+        user_message: str | None = None,
     ) -> RecommendationDraft:
+        ...
+
+    def generate_unblock(
+        self,
+        *,
+        system_prompt: str,
+        user_message: str,
+        context_chunks: list[dict],
+    ) -> UnblockDraft:
         ...
 
 
@@ -50,15 +80,10 @@ class MockAIProvider:
         standard: str,
         task_description: str,
         context_chunks: list[dict],
+        system_prompt: str | None = None,
+        user_message: str | None = None,
     ) -> RecommendationDraft:
-        refs = [
-            {
-                "source_document_id": chunk["source_document_id"],
-                "source_filename": chunk["source_filename"],
-                "chunk_index": chunk["chunk_index"],
-            }
-            for chunk in context_chunks[:5]
-        ]
+        refs = _refs_from_chunks(context_chunks)
         return RecommendationDraft(
             objective=objective,
             standard=standard,
@@ -74,6 +99,60 @@ class MockAIProvider:
             next_action=f"Draft implementation checklist for: {task_description[:80]}",
             source_refs=refs,
         )
+
+    def generate_unblock(
+        self,
+        *,
+        system_prompt: str,
+        user_message: str,
+        context_chunks: list[dict],
+    ) -> UnblockDraft:
+        refs = _refs_from_chunks(context_chunks)
+        alternatives = [
+            {
+                "path": "Conservative rollback",
+                "solves": "Removes the immediate blocker by reverting to the last known-good state.",
+                "tradeoff": "Delays forward progress until the root cause is understood.",
+                "first_step": "Snapshot current state, then restore the prior configuration.",
+                "aligned_standard": "Consistency",
+            },
+            {
+                "path": "Targeted fix",
+                "solves": "Addresses the specific root cause without rolling back surrounding work.",
+                "tradeoff": "Requires deeper diagnosis time before action.",
+                "first_step": "Run diagnostics to confirm the root cause before changing production state.",
+                "aligned_standard": "Accountability",
+            },
+            {
+                "path": "Escalate and reassign",
+                "solves": "Brings in the right owner or specialist to unblock faster than trial-and-error.",
+                "tradeoff": "Uses political capital and hands off context that must be rebuilt.",
+                "first_step": "Draft a one-page handoff note and send it to the assigner today.",
+                "aligned_standard": "Ownership",
+            },
+        ]
+        return UnblockDraft(
+            blocker_summary="Placeholder blocker summary from mock provider.",
+            root_cause_analysis=(
+                "Mock provider: treat this as a stand-in. The real provider "
+                "will diagnose based on the update history and the canon."
+            ),
+            alternatives=alternatives,
+            recommended_path="Path Targeted fix because it addresses the cause, not the symptom.",
+            canon_reference="Canon: pick the lowest-risk path that still closes the loop.",
+            source_refs=refs,
+        )
+
+
+def _refs_from_chunks(context_chunks: list[dict]) -> list[dict]:
+    return [
+        {
+            "source_document_id": chunk.get("source_document_id"),
+            "source_filename": chunk.get("source_filename"),
+            "chunk_index": chunk.get("chunk_index"),
+        }
+        for chunk in (context_chunks or [])[:5]
+    ]
 
 
 def get_ai_provider() -> AIProvider:

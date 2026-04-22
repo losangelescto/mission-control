@@ -82,6 +82,10 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
     recommendation = await apiClient.generateRecommendation(selectedTask.id).catch(() => null);
   }
 
+  const recommendationHistory = selectedTask
+    ? await apiClient.listTaskRecommendations(selectedTask.id).catch(() => [])
+    : [];
+
   const candidates = await apiClient.getTaskCandidates("pending_review").catch(() => []);
 
   // Build query string to preserve current filters when selecting a task
@@ -183,44 +187,151 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
         </article>
       </div>
 
-      <article className="panel">
-        <h2>Recommendation</h2>
-        {selectedTask ? (
-          <div className="stack-sm">
-            <Link
-              className="link-btn"
-              href={`/tasks?selected=${selectedTask.id}&generate_recommendation=1`}
-            >
-              Generate Recommendation
-            </Link>
-            {recommendation ? (
-              <>
-                <div className="small">
-                  <strong>Objective:</strong> {recommendation.objective}
+      {selectedTask ? (
+        recommendation && recommendation.recommendation_type === "unblock" && recommendation.unblock_analysis ? (
+          <article
+            className="panel"
+            style={{
+              borderLeft: "4px solid var(--red)",
+              background: "var(--red-dim)",
+            }}
+          >
+            <h2 style={{ color: "var(--red)" }}>Unblock Analysis</h2>
+            <div className="stack-sm">
+              <Link
+                className="link-btn"
+                href={`/tasks?selected=${selectedTask.id}&generate_recommendation=1`}
+              >
+                Regenerate Analysis
+              </Link>
+
+              <div className="small">
+                <strong>Blocker:</strong> {recommendation.unblock_analysis.blocker_summary}
+              </div>
+              <div className="small">
+                <strong>Root cause:</strong> {recommendation.unblock_analysis.root_cause_analysis}
+              </div>
+
+              <h3 style={{ marginTop: "0.75rem" }}>Alternatives</h3>
+              <div className="grid cols-3">
+                {recommendation.unblock_analysis.alternatives.map((alt, i) => (
+                  <article
+                    key={`${alt.path}-${i}`}
+                    className="panel"
+                    style={{ background: "var(--bg-base)" }}
+                  >
+                    <h3>{alt.path}</h3>
+                    <div className="small" style={{ marginBottom: "0.375rem" }}>
+                      <span className="badge">{alt.aligned_standard}</span>
+                    </div>
+                    <div className="small"><strong>Solves:</strong> {alt.solves}</div>
+                    <div className="small"><strong>Trade-off:</strong> {alt.tradeoff}</div>
+                    <div className="small" style={{ marginTop: "0.5rem" }}>
+                      <strong>First step:</strong> {alt.first_step}
+                    </div>
+                  </article>
+                ))}
+              </div>
+
+              <div className="meta-row" style={{ marginTop: "0.75rem" }}>
+                <strong>Recommended path:</strong>
+                <span>{recommendation.unblock_analysis.recommended_path}</span>
+              </div>
+              <div className="small" style={{ color: "var(--text-tertiary)" }}>
+                <strong>Canon:</strong> {recommendation.unblock_analysis.canon_reference}
+              </div>
+              {recommendation.recommendation_context ? (
+                <div className="small" style={{ color: "var(--text-tertiary)" }}>
+                  Based on {recommendation.recommendation_context.canon_chunks_used} canon excerpts,{" "}
+                  {recommendation.recommendation_context.updates_included} updates, and{" "}
+                  {recommendation.recommendation_context.reviews_included} review notes.
                 </div>
-                <div className="small">
-                  <strong>Standard:</strong> {recommendation.standard}
-                </div>
-                <div className="small">{recommendation.first_principles_plan}</div>
-                <ul className="list">
-                  {recommendation.viable_options.map((option) => (
-                    <li key={option} className="small">
-                      {option}
-                    </li>
-                  ))}
-                </ul>
-                <div className="small">
-                  <strong>Next Action:</strong> {recommendation.next_action}
-                </div>
-              </>
-            ) : (
-              <p className="small">Generate to view the latest recommendation.</p>
-            )}
-          </div>
+              ) : null}
+            </div>
+          </article>
         ) : (
+          <article className="panel">
+            <h2>Recommendation</h2>
+            <div className="stack-sm">
+              <Link
+                className="link-btn"
+                href={`/tasks?selected=${selectedTask.id}&generate_recommendation=1`}
+              >
+                Generate Recommendation
+              </Link>
+              {recommendation ? (
+                <>
+                  <div className="small">
+                    <strong>Objective:</strong> {recommendation.objective}
+                  </div>
+                  <div className="small">
+                    <strong>Standard:</strong> {recommendation.standard}
+                  </div>
+                  <div className="small">{recommendation.first_principles_plan}</div>
+                  <ul className="list">
+                    {recommendation.viable_options.map((option) => (
+                      <li key={option} className="small">
+                        {option}
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="small">
+                    <strong>Next Action:</strong> {recommendation.next_action}
+                  </div>
+                  {recommendation.recommendation_context ? (
+                    <div className="small" style={{ color: "var(--text-tertiary)" }}>
+                      Based on {recommendation.recommendation_context.canon_chunks_used} canon excerpts,{" "}
+                      {recommendation.recommendation_context.updates_included} updates, and{" "}
+                      {recommendation.recommendation_context.reviews_included} review notes.
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <p className="small">Generate to view the latest recommendation.</p>
+              )}
+            </div>
+          </article>
+        )
+      ) : (
+        <article className="panel">
+          <h2>Recommendation</h2>
           <p className="small">Select a task first.</p>
-        )}
-      </article>
+        </article>
+      )}
+
+      {selectedTask && recommendationHistory.length > 0 ? (
+        <article className="panel">
+          <details>
+            <summary>Previous Recommendations ({recommendationHistory.length})</summary>
+            <ul className="list" style={{ marginTop: "0.5rem" }}>
+              {recommendationHistory.slice(0, 5).map((h) => (
+                <li key={h.id}>
+                  <div className="meta-row">
+                    <span className="badge" data-status={h.recommendation_type === "unblock" ? "blocked" : "up_next"}>
+                      {h.recommendation_type}
+                    </span>
+                    <span>
+                      {new Date(h.created_at).toLocaleString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </div>
+                  <div className="small" style={{ marginTop: "0.25rem" }}>
+                    <strong>Standard:</strong> {h.standard}
+                  </div>
+                  <div className="small">
+                    <strong>Next action:</strong> {h.next_action}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </details>
+        </article>
+      ) : null}
 
       <article className="panel">
         <h2>Suggested Tasks — Extracted from Sources</h2>

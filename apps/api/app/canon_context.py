@@ -1,27 +1,25 @@
 """Assemble the canon-grounded system prompt for recommendation generation.
 
-The context block injected into every LLM call has three layers:
+Two modes:
 
-1. **Identity and voice** — a stable system preamble that positions the model as
-   the operational intelligence for The Uncommon Pursuit, the operating philosophy
-   for luxury property management. The voice is direct, conviction-driven, no
-   corporate filler.
+- **Standard** (``build_standard_system_prompt``/``build_standard_user_message``):
+  every not-blocked task. Includes canon chunks, Seven Standards reference
+  frame, the task's recent updates, its review notes, and a history summary
+  so the LLM can reference what has already been tried.
 
-2. **Standing reference frame** — the Seven Standards and the canon's core
-   operating principles. These are always included, independent of retrieval,
-   because they apply to every recommendation.
+- **Unblock** (``build_unblock_system_prompt``/``build_unblock_user_message``):
+  used when ``task.status == "blocked"``. The prompt asks for root-cause
+  analysis and three first-principles alternatives with trade-offs, each
+  aligned to a Standard.
 
-3. **Retrieved canon chunks** — semantically ranked excerpts from the active
-   canon documents, plus recent source history, selected by the embedding
-   similarity search already in place upstream of this module.
-
-The output is a single string suitable as the ``system`` parameter on the
-Anthropic ``messages.create`` call. Keep it lean — the user message carries
-the task itself.
+Both modes share the same voice: direct, conviction-driven, no corporate
+filler. Both require strict-JSON output to a schema the provider will
+parse.
 """
 from __future__ import annotations
 
-from typing import Sequence
+from datetime import datetime
+from typing import Any, Sequence
 
 
 SEVEN_STANDARDS: list[tuple[str, str]] = [
@@ -35,34 +33,78 @@ SEVEN_STANDARDS: list[tuple[str, str]] = [
 ]
 
 
-SYSTEM_PREAMBLE = """You are the operational intelligence for The Uncommon Pursuit, \
+# ─── Shared voice preamble ──────────────────────────────────────────────
+
+_SHARED_VOICE = """You are the operational intelligence for The Uncommon Pursuit, \
 the operating philosophy for luxury property management.
 
-Your job is to produce recommendations that are specific, conviction-driven, and \
-grounded in the canon. Avoid corporate filler — no "consider", no "evaluate", no \
-"explore opportunities". State the move, name the standard it serves, and give a \
-concrete next action the owner can take today.
+The voice is direct, conviction-driven, and exacting — no corporate filler, no \
+"consider", no "evaluate". Name the move. Name the Standard it serves. Give a \
+concrete action the owner can execute today.
+
+You MUST return a single JSON object and nothing else — no prose before or \
+after, no markdown fences. The schema for this mode is spelled out below; \
+follow it exactly."""
+
+
+# ─── Standard mode ──────────────────────────────────────────────────────
+
+_STANDARD_INSTRUCTIONS = """STANDARD MODE INSTRUCTIONS:
 
 Every recommendation must:
-- Lead with the most relevant of the Seven Standards for this task.
+- Lead with the single Standard most at stake for this task.
 - Frame the objective in terms of The Uncommon Pursuit's mission, not generic \
 project management.
-- Stay in the canon's voice: direct, warm, exacting.
-- End with a single next action that is specific enough to execute today — not \
-"schedule a meeting", but "draft the resident-facing note and send it to Alex \
-for review by Friday at 5pm".
+- Incorporate the update history below: what has changed, what progress has \
+been made, what keeps recurring. If the same blocker or concern appears \
+multiple times, flag it as a pattern.
+- Build on what has already been tried. Do NOT repeat advice that prior \
+updates show was already attempted.
+- Reference specific updates inline when relevant \
+(for example: "Based on the Apr 10 update where...").
+- End with a single next_action specific enough to execute today.
 
-You MUST return a single JSON object and nothing else — no prose before or after, \
-no markdown fences. The object must have exactly these keys:
-  - "standard":               the single Standard that anchors this recommendation
-  - "objective":               one sentence, mission-aligned
-  - "first_principles_plan":   a short plan (3-5 sentences) derived from canon, \
-not templates
-  - "viable_options":          a JSON array of 2-3 strings, each one a distinct \
-option with its trade-off
-  - "next_action":             a single concrete action the owner can execute today
+Output schema — return a JSON object with EXACTLY these keys:
+  "standard":              one of the Seven Standards by name
+  "objective":             one sentence, mission-aligned
+  "first_principles_plan": 3-5 sentences grounded in the canon, not templates
+  "viable_options":        JSON array of 2-3 strings, each a distinct option with its trade-off
+  "next_action":           one concrete action the owner can execute today
 """
 
+
+# ─── Unblock mode ───────────────────────────────────────────────────────
+
+_UNBLOCK_INSTRUCTIONS = """UNBLOCK MODE INSTRUCTIONS:
+
+This task is blocked. Your job is to break the block with first-principles \
+thinking, not to repeat what has already been tried.
+
+Do all of the following:
+- Acknowledge the specific blocker described below.
+- Perform root-cause analysis: name the root cause, not the symptom.
+- Propose EXACTLY THREE alternative paths forward. Each alternative must be \
+distinct in approach — not three variations of the same idea.
+- For each alternative, align it to the single most relevant of the Seven \
+Standards.
+- End with a recommended_path stating which alternative you choose and why, \
+in terms of the canon.
+
+Output schema — return a JSON object with EXACTLY these keys:
+  "blocker_summary":      one or two sentences describing what is blocking the task
+  "root_cause_analysis":  3-5 sentences identifying the root cause (not the symptom)
+  "alternatives":         JSON array of EXACTLY 3 objects, each with:
+                            "path"              — short name of the alternative
+                            "solves"            — what this alternative resolves
+                            "tradeoff"          — what it costs or risks
+                            "first_step"        — a concrete first step to execute
+                            "aligned_standard"  — one of the Seven Standards by name
+  "recommended_path":     one sentence of the form "Path <name> because <reason>"
+  "canon_reference":      one to two sentences quoting or paraphrasing the canon excerpt that supports the recommended path
+"""
+
+
+# ─── Formatters ─────────────────────────────────────────────────────────
 
 def _format_seven_standards() -> str:
     lines = ["The Seven Standards (always apply all seven; pick the one most at stake):"]
@@ -85,44 +127,159 @@ def _format_retrieved_chunks(chunks: Sequence[dict]) -> str:
     return "Retrieved excerpts (ranked by relevance):\n\n" + "\n\n".join(blocks)
 
 
-def build_recommendation_system_prompt(context_chunks: Sequence[dict]) -> str:
-    """Return the full system prompt for a recommendation call.
+def _format_updates(updates: Sequence[dict]) -> str:
+    if not updates:
+        return "Task update history: (no updates recorded yet)"
+    lines = ["Task update history (newest first — reference these when relevant):"]
+    for upd in updates:
+        ts = upd.get("created_at_display") or upd.get("created_at") or "?"
+        author = upd.get("created_by") or "unknown"
+        summary = (upd.get("summary") or "").strip()
+        lines.append(f"  - [{ts}] {author}: {summary}")
+    return "\n".join(lines)
 
-    ``context_chunks`` is the same list the mock provider already receives —
-    the result of the embedding similarity search in services.retrieve_search.
-    """
-    sections = [
-        SYSTEM_PREAMBLE,
-        _format_seven_standards(),
-        _format_retrieved_chunks(context_chunks),
+
+def _format_blocker(blocker: dict | None) -> str:
+    if not blocker:
+        return "Current blocker: none — task is not blocked."
+    opened = blocker.get("opened_at_display") or blocker.get("opened_at") or "?"
+    reason = (blocker.get("blocker_reason") or "").strip()
+    severity = blocker.get("severity") or "?"
+    btype = blocker.get("blocker_type") or "?"
+    return (
+        f"Current blocker (opened {opened}):\n"
+        f"  type: {btype}\n"
+        f"  severity: {severity}\n"
+        f"  reason: {reason}"
+    )
+
+
+def _format_reviews(reviews: Sequence[dict]) -> str:
+    if not reviews:
+        return "Recent review sessions: (none)"
+    lines = ["Recent review sessions (newest first):"]
+    for r in reviews:
+        ts = r.get("created_at_display") or r.get("created_at") or "?"
+        reviewer = r.get("reviewer") or "unknown"
+        notes = (r.get("notes") or "").strip()
+        action_items = (r.get("action_items") or "").strip()
+        lines.append(f"  - [{ts}] {reviewer}")
+        if notes:
+            lines.append(f"      notes: {notes}")
+        if action_items:
+            lines.append(f"      action_items: {action_items}")
+    return "\n".join(lines)
+
+
+def _format_history_summary(summary: dict | None) -> str:
+    if not summary:
+        return ""
+    parts = [
+        f"days since creation: {summary.get('days_since_creation', '?')}",
+        f"updates recorded: {summary.get('update_count', 0)}",
+        f"times blocked: {summary.get('block_count', 0)}",
+        f"reassignments: {summary.get('reassignment_count', 0)}",
     ]
-    return "\n\n---\n\n".join(sections)
+    return "Task history summary: " + " | ".join(parts)
 
 
-def build_recommendation_user_message(
+def _format_task_header(task: dict) -> str:
+    due_line = task.get("due_at_display") or task.get("due_at") or "not set"
+    return (
+        f"Task: {task.get('title', '').strip()}\n"
+        f"Status: {task.get('status')} | Priority: {task.get('priority')}\n"
+        f"Owner: {task.get('owner_name')} | Assigned by: {task.get('assigner_name')}\n"
+        f"Due: {due_line}"
+    )
+
+
+# ─── Public builders — standard mode ────────────────────────────────────
+
+def build_standard_system_prompt(
     *,
-    task_title: str,
-    task_description: str,
-    task_status: str,
-    task_priority: str,
-    owner_name: str,
-    assigner_name: str,
-    due_at_iso: str | None,
+    canon_chunks: Sequence[dict],
+    updates: Sequence[dict],
+    blocker: dict | None,
+    reviews: Sequence[dict],
+    history_summary: dict | None,
+) -> str:
+    """Return the full system prompt for a standard recommendation call."""
+    sections = [
+        _SHARED_VOICE,
+        _STANDARD_INSTRUCTIONS,
+        _format_seven_standards(),
+        _format_retrieved_chunks(canon_chunks),
+        _format_updates(updates),
+        _format_blocker(blocker),
+        _format_reviews(reviews),
+        _format_history_summary(history_summary),
+    ]
+    return "\n\n---\n\n".join(s for s in sections if s)
+
+
+def build_standard_user_message(
+    *,
+    task: dict,
     objective_seed: str,
     standard_seed: str,
 ) -> str:
-    """Return the user message body describing the task in question."""
-    due_line = due_at_iso if due_at_iso else "not set"
     return (
-        f"Task: {task_title}\n"
-        f"Status: {task_status} | Priority: {task_priority}\n"
-        f"Owner: {owner_name} | Assigned by: {assigner_name}\n"
-        f"Due: {due_line}\n"
-        f"\n"
-        f"Current objective (may be refined): {objective_seed}\n"
-        f"Current standard hint (may be refined): {standard_seed}\n"
-        f"\n"
-        f"Description and recent updates:\n{task_description}\n"
-        f"\n"
-        f"Produce the JSON recommendation now."
+        _format_task_header(task)
+        + "\n\n"
+        + f"Current objective (may be refined): {objective_seed}\n"
+        + f"Current standard hint (may be refined): {standard_seed}\n"
+        + "\n"
+        + f"Description:\n{task.get('description', '').strip()}\n"
+        + "\n"
+        + "Produce the standard-mode JSON recommendation now."
     )
+
+
+# ─── Public builders — unblock mode ─────────────────────────────────────
+
+def build_unblock_system_prompt(
+    *,
+    canon_chunks: Sequence[dict],
+    updates: Sequence[dict],
+    blocker: dict | None,
+    reviews: Sequence[dict],
+    history_summary: dict | None,
+) -> str:
+    """Return the full system prompt for an unblock-mode call."""
+    sections = [
+        _SHARED_VOICE,
+        _UNBLOCK_INSTRUCTIONS,
+        _format_seven_standards(),
+        _format_retrieved_chunks(canon_chunks),
+        _format_updates(updates),
+        _format_blocker(blocker),
+        _format_reviews(reviews),
+        _format_history_summary(history_summary),
+    ]
+    return "\n\n---\n\n".join(s for s in sections if s)
+
+
+def build_unblock_user_message(*, task: dict) -> str:
+    return (
+        _format_task_header(task)
+        + "\n\n"
+        + f"Description:\n{task.get('description', '').strip()}\n"
+        + "\n"
+        + "Produce the unblock-mode JSON recommendation now. Three distinct "
+        + "alternatives are required — not three variations of the same idea."
+    )
+
+
+# ─── Helpers used by services to normalise timestamps for display ───────
+
+def format_timestamp(dt: datetime | None) -> str:
+    if dt is None:
+        return ""
+    return dt.strftime("%Y-%m-%d")
+
+
+def serialize_for_context(value: Any) -> Any:
+    """Best-effort JSON-friendly conversion used by the context hash."""
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return value

@@ -276,6 +276,29 @@ class RetrieveSearchResponse(BaseModel):
     results: list[RetrievedChunkResponse]
 
 
+class UnblockAlternative(BaseModel):
+    path: str
+    solves: str
+    tradeoff: str
+    first_step: str
+    aligned_standard: str
+
+
+class UnblockAnalysis(BaseModel):
+    blocker_summary: str
+    root_cause_analysis: str
+    alternatives: list[UnblockAlternative]
+    recommended_path: str
+    canon_reference: str
+
+
+class RecommendationContextMeta(BaseModel):
+    canon_chunks_used: int
+    updates_included: int
+    reviews_included: int
+    blocker_active: bool
+
+
 class RecommendationResponse(BaseModel):
     id: int
     task_id: int
@@ -286,6 +309,19 @@ class RecommendationResponse(BaseModel):
     next_action: str
     source_refs: list[dict]
     created_at: datetime
+    recommendation_type: str = "standard"
+    recommendation_context: RecommendationContextMeta | None = None
+    unblock_analysis: UnblockAnalysis | None = None
+
+
+class RecommendationHistoryItem(BaseModel):
+    id: int
+    task_id: int
+    recommendation_type: str
+    created_at: datetime
+    objective: str
+    standard: str
+    next_action: str
 
 
 class DailyReviewItem(BaseModel):

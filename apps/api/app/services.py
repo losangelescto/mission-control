@@ -19,8 +19,10 @@ from app.mail_email_extraction import (
 )
 from app.mailbox.repository import get_mailbox_source
 from app.models import (
+    Blocker,
     CallArtifact,
     DailyRollup,
+    Delegation,
     MailboxMessage,
     MailboxThread,
     RecurrenceTemplate,
@@ -1182,6 +1184,124 @@ def _latest_recommendation_for_task(db: Session, task_id: int) -> Recommendation
     return db.scalar(stmt)
 
 
+def list_task_recommendations(
+    db: Session, *, task_id: int, limit: int = 20
+) -> list[Recommendation]:
+    # Order by id as tiebreaker — SQLite's second-precision timestamps can
+    # collide when multiple recommendations are generated in rapid succession.
+    stmt = (
+        select(Recommendation)
+        .where(Recommendation.task_id == task_id)
+        .order_by(Recommendation.created_at.desc(), Recommendation.id.desc())
+        .limit(limit)
+    )
+    return list(db.scalars(stmt).all())
+
+
+def _update_to_context_dict(u: TaskUpdate) -> dict:
+    return {
+        "id": u.id,
+        "summary": u.summary,
+        "created_by": u.created_by,
+        "created_at_display": u.created_at.strftime("%Y-%m-%d") if u.created_at else "",
+        "created_at_iso": u.created_at.isoformat() if u.created_at else None,
+    }
+
+
+def _blocker_to_context_dict(b: Blocker | None) -> dict | None:
+    if b is None:
+        return None
+    return {
+        "id": b.id,
+        "blocker_type": b.blocker_type,
+        "blocker_reason": b.blocker_reason,
+        "severity": b.severity,
+        "opened_at_display": b.opened_at.strftime("%Y-%m-%d") if b.opened_at else "",
+        "opened_at_iso": b.opened_at.isoformat() if b.opened_at else None,
+    }
+
+
+def _review_to_context_dict(r) -> dict:  # type: ignore[no-untyped-def]
+    return {
+        "id": r.id,
+        "reviewer": r.reviewer,
+        "notes": r.notes,
+        "action_items": r.action_items,
+        "created_at_display": r.created_at.strftime("%Y-%m-%d") if r.created_at else "",
+        "created_at_iso": r.created_at.isoformat() if r.created_at else None,
+    }
+
+
+def _task_history_summary(db: Session, task: Task) -> dict:
+    from app.repositories import list_review_sessions as repo_list_review_sessions
+
+    stmt_blockers = select(Blocker).where(Blocker.task_id == task.id)
+    all_blockers = list(db.scalars(stmt_blockers).all())
+    stmt_delegations = select(Delegation).where(Delegation.task_id == task.id)
+    delegations = list(db.scalars(stmt_delegations).all())
+
+    now = datetime.now(UTC)
+    days = (now - _as_utc(task.created_at)).days if task.created_at else 0
+    return {
+        "days_since_creation": days,
+        "update_count": len(repo_list_task_updates(db, task.id)),
+        "block_count": len(all_blockers),
+        "reassignment_count": len(delegations),
+        "review_count": len(repo_list_review_sessions(db, task_id=task.id)),
+    }
+
+
+def _task_to_context_dict(task: Task) -> dict:
+    return {
+        "id": task.id,
+        "title": task.title,
+        "description": task.description,
+        "objective": task.objective,
+        "standard": task.standard,
+        "status": task.status,
+        "priority": task.priority,
+        "owner_name": task.owner_name,
+        "assigner_name": task.assigner_name,
+        "due_at": task.due_at.isoformat() if task.due_at else None,
+        "due_at_display": task.due_at.strftime("%Y-%m-%d") if task.due_at else None,
+    }
+
+
+def _compute_context_hash(
+    *,
+    task_dict: dict,
+    canon_chunks: list[dict],
+    updates: list[dict],
+    blocker: dict | None,
+    reviews: list[dict],
+    mode: str,
+) -> str:
+    """Hex sha256 of the normalised input bundle.
+
+    Only identity-bearing fields are hashed — update IDs, canon chunk IDs,
+    review IDs — so text edits to the canon or updates still bust the cache
+    via task.updated_at / rec.created_at comparisons elsewhere. The hash is
+    deliberately cheap to compute.
+    """
+    import hashlib as _hashlib
+    import json as _json
+
+    bundle = {
+        "mode": mode,
+        "task": {k: task_dict.get(k) for k in ("id", "status", "priority", "objective", "standard", "owner_name", "due_at")},
+        "task_description_len": len(task_dict.get("description") or ""),
+        "updates": [{"id": u.get("id"), "ts": u.get("created_at_iso")} for u in updates],
+        "blocker": {"id": blocker.get("id")} if blocker else None,
+        "reviews": [{"id": r.get("id"), "ts": r.get("created_at_iso")} for r in reviews],
+        "canon_chunks": [
+            {"sid": c.get("source_document_id"), "ix": c.get("chunk_index")}
+            for c in canon_chunks
+        ],
+    }
+    raw = _json.dumps(bundle, sort_keys=True, default=str)
+    return _hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
 def generate_task_recommendation(
     db: Session,
     task_id: int,
@@ -1189,6 +1309,14 @@ def generate_task_recommendation(
     ai_provider: AIProvider | None = None,
     embeddings_adapter: EmbeddingsAdapter | None = None,
 ) -> Recommendation | None:
+    from app.canon_context import (
+        build_standard_system_prompt,
+        build_standard_user_message,
+        build_unblock_system_prompt,
+        build_unblock_user_message,
+    )
+    from app.repositories import list_review_sessions as repo_list_review_sessions
+
     task = get_task_by_id(db, task_id)
     if task is None:
         return None
@@ -1197,46 +1325,27 @@ def generate_task_recommendation(
         extra={"event": "recommendation_started", "context": {"task_id": task_id}},
     )
 
-    # Short-circuit if a recent recommendation is still fresh AND the task
-    # has not been modified since it was generated. LLM calls are expensive
-    # and noisy — a 5-minute cache is enough to deduplicate rapid retries.
-    cache_seconds = get_settings().recommendation_cache_seconds
-    if cache_seconds > 0:
-        latest = _latest_recommendation_for_task(db, task.id)
-        if latest is not None:
-            age = (datetime.now(UTC) - _as_utc(latest.created_at)).total_seconds()
-            task_updated = _as_utc(task.updated_at)
-            rec_created = _as_utc(latest.created_at)
-            if age < cache_seconds and task_updated <= rec_created:
-                logger.info(
-                    "recommendation cache hit",
-                    extra={
-                        "event": "recommendation_cache_hit",
-                        "context": {
-                            "task_id": task_id,
-                            "recommendation_id": latest.id,
-                            "age_seconds": round(age, 2),
-                        },
-                    },
-                )
-                return latest
+    # ─── Assemble the full context for the prompt + hash ───
+    recent_updates_models = repo_list_task_updates(db, task.id)[-10:]
+    recent_updates = [_update_to_context_dict(u) for u in reversed(recent_updates_models)]
+    blocker_model = get_open_blocker_for_task(db, task.id)
+    blocker = _blocker_to_context_dict(blocker_model)
+    recent_reviews = [
+        _review_to_context_dict(r)
+        for r in repo_list_review_sessions(db, task_id=task.id)[:3]
+    ]
+    history_summary = _task_history_summary(db, task)
+    task_dict = _task_to_context_dict(task)
 
-    # Include recent task updates in the recommendation context.
-    recent_updates = repo_list_task_updates(db, task.id)[-10:]
-    updates_text = ""
-    if recent_updates:
-        lines = [
-            f"- [{u.created_at.strftime('%Y-%m-%d')}] {u.summary}"
-            for u in recent_updates
-        ]
-        updates_text = "\n\nRecent updates:\n" + "\n".join(lines)
-
-    task_desc_with_updates = task.description + updates_text
-
-    # Grounding from active canon plus broader source history.
+    # Build a retrieval query from the task + recent update summaries so the
+    # canon chunks we pull reflect what has actually happened lately.
+    update_text_for_query = "\n".join(f"- {u['summary']}" for u in recent_updates)
+    retrieval_query = (
+        f"{task.objective}\n{task.standard}\n{task.description}\n{update_text_for_query}"
+    )
     canon_context = retrieve_search(
         db,
-        query=f"{task.objective}\n{task.standard}\n{task_desc_with_updates}",
+        query=retrieval_query,
         active_canon_only=True,
         source_types=None,
         embeddings_adapter=embeddings_adapter,
@@ -1244,7 +1353,7 @@ def generate_task_recommendation(
     )
     history_context = retrieve_search(
         db,
-        query=f"{task.objective}\n{task.standard}\n{task_desc_with_updates}",
+        query=retrieval_query,
         active_canon_only=False,
         source_types=None,
         embeddings_adapter=embeddings_adapter,
@@ -1256,16 +1365,133 @@ def generate_task_recommendation(
         }
     ]
 
-    provider = ai_provider or get_ai_provider()
-    draft = provider.generate_recommendation(
-        objective=task.objective,
-        standard=task.standard,
-        task_description=task_desc_with_updates,
-        context_chunks=context,
+    is_blocked = (task.status == "blocked")
+    mode = "unblock" if is_blocked else "standard"
+    context_hash = _compute_context_hash(
+        task_dict=task_dict,
+        canon_chunks=context,
+        updates=recent_updates,
+        blocker=blocker,
+        reviews=recent_reviews,
+        mode=mode,
     )
-    recommendation = repo_create_recommendation(
-        db,
-        {
+
+    # ─── Cache: return last rec if fresh AND same input hash ───
+    cache_seconds = get_settings().recommendation_cache_seconds
+    if cache_seconds > 0:
+        latest = _latest_recommendation_for_task(db, task.id)
+        if latest is not None and latest.input_context_hash == context_hash:
+            age = (datetime.now(UTC) - _as_utc(latest.created_at)).total_seconds()
+            if age < cache_seconds:
+                logger.info(
+                    "recommendation cache hit",
+                    extra={
+                        "event": "recommendation_cache_hit",
+                        "context": {
+                            "task_id": task_id,
+                            "recommendation_id": latest.id,
+                            "age_seconds": round(age, 2),
+                            "mode": mode,
+                        },
+                    },
+                )
+                return latest
+
+    # ─── Call the provider in the correct mode ───
+    provider = ai_provider or get_ai_provider()
+    recommendation_context_meta = {
+        "canon_chunks_used": len(context),
+        "updates_included": len(recent_updates),
+        "reviews_included": len(recent_reviews),
+        "blocker_active": is_blocked or bool(blocker),
+    }
+
+    if is_blocked:
+        unblock_system = build_unblock_system_prompt(
+            canon_chunks=context,
+            updates=recent_updates,
+            blocker=blocker,
+            reviews=recent_reviews,
+            history_summary=history_summary,
+        )
+        unblock_user = build_unblock_user_message(task=task_dict)
+        unblock = provider.generate_unblock(
+            system_prompt=unblock_system,
+            user_message=unblock_user,
+            context_chunks=context,
+        )
+        # Synthesise the classic RecommendationDraft fields from the
+        # unblock output so existing callers (the POST route, downstream
+        # consumers) keep seeing a consistent top-level shape.
+        top_alt = unblock.alternatives[0] if unblock.alternatives else {
+            "path": "unknown", "first_step": "Clarify the blocker.", "aligned_standard": task.standard,
+        }
+        synth_objective = f"Unblock: {task.title}".strip() or "Unblock this task"
+        synth_standard = top_alt.get("aligned_standard") or task.standard
+        synth_plan = unblock.root_cause_analysis
+        synth_options = [
+            f"{alt.get('path', '?')}: {alt.get('solves', '')}".strip().rstrip(":")
+            for alt in unblock.alternatives
+        ]
+        synth_next = top_alt.get("first_step") or "Clarify the blocker with the assigner."
+        response_payload = {
+            "blocker_summary": unblock.blocker_summary,
+            "root_cause_analysis": unblock.root_cause_analysis,
+            "alternatives": unblock.alternatives,
+            "recommended_path": unblock.recommended_path,
+            "canon_reference": unblock.canon_reference,
+            "source_refs": unblock.source_refs,
+            "recommendation_context": recommendation_context_meta,
+        }
+        rec_payload = {
+            "task_id": task.id,
+            "objective": synth_objective,
+            "standard": synth_standard,
+            "first_principles_plan": synth_plan,
+            "viable_options_json": synth_options,
+            "next_action": synth_next,
+            "source_refs_json": unblock.source_refs,
+            "recommendation_type": "unblock",
+            "input_context_hash": context_hash,
+            "response_json": response_payload,
+        }
+    else:
+        standard_system = build_standard_system_prompt(
+            canon_chunks=context,
+            updates=recent_updates,
+            blocker=blocker,
+            reviews=recent_reviews,
+            history_summary=history_summary,
+        )
+        standard_user = build_standard_user_message(
+            task=task_dict,
+            objective_seed=task.objective,
+            standard_seed=task.standard,
+        )
+        # Keep the task_description fallback populated for providers that
+        # ignore the pre-built prompts (e.g. older mock implementations).
+        updates_text = (
+            "\n\nRecent updates:\n" + "\n".join(f"- [{u['created_at_display']}] {u['summary']}" for u in recent_updates)
+            if recent_updates else ""
+        )
+        draft = provider.generate_recommendation(
+            objective=task.objective,
+            standard=task.standard,
+            task_description=task.description + updates_text,
+            context_chunks=context,
+            system_prompt=standard_system,
+            user_message=standard_user,
+        )
+        response_payload = {
+            "objective": draft.objective,
+            "standard": draft.standard,
+            "first_principles_plan": draft.first_principles_plan,
+            "viable_options": draft.viable_options,
+            "next_action": draft.next_action,
+            "source_refs": draft.source_refs,
+            "recommendation_context": recommendation_context_meta,
+        }
+        rec_payload = {
             "task_id": task.id,
             "objective": draft.objective,
             "standard": draft.standard,
@@ -1273,14 +1499,20 @@ def generate_task_recommendation(
             "viable_options_json": draft.viable_options,
             "next_action": draft.next_action,
             "source_refs_json": draft.source_refs,
-        },
-    )
+            "recommendation_type": "standard",
+            "input_context_hash": context_hash,
+            "response_json": response_payload,
+        }
+    recommendation = repo_create_recommendation(db, rec_payload)
     create_audit_event(
         db=db,
         entity_type="task",
         entity_id=str(task.id),
         event_type="recommendation_generated",
-        payload_json={"recommendation_id": recommendation.id},
+        payload_json={
+            "recommendation_id": recommendation.id,
+            "mode": mode,
+        },
     )
     db.commit()
     db.refresh(recommendation)
@@ -1288,7 +1520,11 @@ def generate_task_recommendation(
         "recommendation generation completed",
         extra={
             "event": "recommendation_completed",
-            "context": {"task_id": task_id, "recommendation_id": recommendation.id},
+            "context": {
+                "task_id": task_id,
+                "recommendation_id": recommendation.id,
+                "mode": mode,
+            },
         },
     )
     return recommendation

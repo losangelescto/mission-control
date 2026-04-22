@@ -4,6 +4,7 @@ import {
   MetricsByOwner,
   MetricsSummary,
   Recommendation,
+  RecommendationHistoryItem,
   ReviewSession,
   SourceDocument,
   StandardScore,
@@ -123,6 +124,10 @@ export const apiClient = {
     return apiFetch<Recommendation>(`/tasks/${taskId}/recommendation`, {
       method: "POST",
     });
+  },
+
+  async listTaskRecommendations(taskId: number): Promise<RecommendationHistoryItem[]> {
+    return apiFetch<RecommendationHistoryItem[]>(`/tasks/${taskId}/recommendations`);
   },
 
   async getReviews(params?: {

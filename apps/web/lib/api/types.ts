@@ -155,6 +155,29 @@ export type CadenceStatus = {
   overdue: boolean;
 };
 
+export type UnblockAlternative = {
+  path: string;
+  solves: string;
+  tradeoff: string;
+  first_step: string;
+  aligned_standard: string;
+};
+
+export type UnblockAnalysis = {
+  blocker_summary: string;
+  root_cause_analysis: string;
+  alternatives: UnblockAlternative[];
+  recommended_path: string;
+  canon_reference: string;
+};
+
+export type RecommendationContextMeta = {
+  canon_chunks_used: number;
+  updates_included: number;
+  reviews_included: number;
+  blocker_active: boolean;
+};
+
 export type Recommendation = {
   id: number;
   task_id: number;
@@ -165,4 +188,17 @@ export type Recommendation = {
   next_action: string;
   source_refs: Record<string, unknown>[];
   created_at: string;
+  recommendation_type: "standard" | "unblock";
+  recommendation_context: RecommendationContextMeta | null;
+  unblock_analysis: UnblockAnalysis | null;
+};
+
+export type RecommendationHistoryItem = {
+  id: number;
+  task_id: number;
+  recommendation_type: "standard" | "unblock";
+  created_at: string;
+  objective: string;
+  standard: string;
+  next_action: string;
 };

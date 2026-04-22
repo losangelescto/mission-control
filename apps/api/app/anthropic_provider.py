@@ -21,11 +21,7 @@ import logging
 import re
 from typing import Any
 
-from app.canon_context import (
-    build_recommendation_system_prompt,
-    build_recommendation_user_message,
-)
-from app.providers import AIProvider, MockAIProvider, RecommendationDraft
+from app.providers import AIProvider, MockAIProvider, RecommendationDraft, UnblockDraft
 
 logger = logging.getLogger(__name__)
 
@@ -72,35 +68,42 @@ class AnthropicProvider:
         standard: str,
         task_description: str,
         context_chunks: list[dict],
+        system_prompt: str | None = None,
+        user_message: str | None = None,
     ) -> RecommendationDraft:
-        # The protocol only gives us what the current service passes in. That
-        # is enough for a grounded recommendation — the description already
-        # carries title, status, owner, and recent updates from the caller.
-        system_prompt = build_recommendation_system_prompt(context_chunks)
-        user_message = build_recommendation_user_message(
-            task_title=task_description.splitlines()[0] if task_description else "",
-            task_description=task_description,
-            task_status="unknown",
-            task_priority="unknown",
-            owner_name="unknown",
-            assigner_name="unknown",
-            due_at_iso=None,
-            objective_seed=objective,
-            standard_seed=standard,
-        )
+        # Prefer caller-built prompts (services owns context assembly now) —
+        # fall back to a minimal pair if a legacy caller still uses the old
+        # four-argument form.
+        if system_prompt is None or user_message is None:
+            from app.canon_context import (
+                build_standard_system_prompt,
+                build_standard_user_message,
+            )
+
+            system_prompt = build_standard_system_prompt(
+                canon_chunks=context_chunks,
+                updates=[],
+                blocker=None,
+                reviews=[],
+                history_summary=None,
+            )
+            user_message = build_standard_user_message(
+                task={
+                    "title": task_description.splitlines()[0] if task_description else "",
+                    "description": task_description,
+                    "status": "unknown",
+                    "priority": "unknown",
+                    "owner_name": "unknown",
+                    "assigner_name": "unknown",
+                    "due_at_display": None,
+                },
+                objective_seed=objective,
+                standard_seed=standard,
+            )
 
         try:
-            client = self._get_client()
-            response = client.messages.create(
-                model=self._model,
-                max_tokens=self._max_tokens,
-                temperature=self._temperature,
-                system=system_prompt,
-                messages=[{"role": "user", "content": user_message}],
-            )
-            text = _extract_text(response)
-            payload = _parse_json_response(text)
-            return _build_draft(payload, context_chunks, objective, standard)
+            payload = self._call_llm(system_prompt, user_message)
+            return _build_standard_draft(payload, context_chunks, objective, standard)
         except Exception as exc:  # noqa: BLE001
             logger.warning(
                 "anthropic recommendation failed; returning mock fallback",
@@ -119,6 +122,46 @@ class AnthropicProvider:
                 {"source": "fallback_due_to_llm_error", "error": str(exc)[:200]}
             )
             return fallback
+
+    def generate_unblock(
+        self,
+        *,
+        system_prompt: str,
+        user_message: str,
+        context_chunks: list[dict],
+    ) -> UnblockDraft:
+        try:
+            payload = self._call_llm(system_prompt, user_message)
+            return _build_unblock_draft(payload, context_chunks)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "anthropic unblock failed; returning mock fallback",
+                extra={
+                    "event": "anthropic_unblock_failed",
+                    "context": {"error": str(exc), "model": self._model},
+                },
+            )
+            fallback = self._fallback.generate_unblock(
+                system_prompt=system_prompt,
+                user_message=user_message,
+                context_chunks=context_chunks,
+            )
+            fallback.source_refs.append(
+                {"source": "fallback_due_to_llm_error", "error": str(exc)[:200]}
+            )
+            return fallback
+
+    def _call_llm(self, system_prompt: str, user_message: str) -> dict:
+        client = self._get_client()
+        response = client.messages.create(
+            model=self._model,
+            max_tokens=self._max_tokens,
+            temperature=self._temperature,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_message}],
+        )
+        text = _extract_text(response)
+        return _parse_json_response(text)
 
 
 def _extract_text(response: Any) -> str:
@@ -147,7 +190,18 @@ def _parse_json_response(text: str) -> dict:
     return payload
 
 
-def _build_draft(
+def _refs(context_chunks: list[dict]) -> list[dict]:
+    return [
+        {
+            "source_document_id": chunk.get("source_document_id"),
+            "source_filename": chunk.get("source_filename"),
+            "chunk_index": chunk.get("chunk_index"),
+        }
+        for chunk in (context_chunks or [])[:5]
+    ]
+
+
+def _build_standard_draft(
     payload: dict,
     context_chunks: list[dict],
     objective_seed: str,
@@ -169,15 +223,6 @@ def _build_draft(
         ]
         options = options[:3]
 
-    source_refs = [
-        {
-            "source_document_id": chunk.get("source_document_id"),
-            "source_filename": chunk.get("source_filename"),
-            "chunk_index": chunk.get("chunk_index"),
-        }
-        for chunk in context_chunks[:5]
-    ]
-
     return RecommendationDraft(
         objective=(payload.get("objective") or objective_seed).strip(),
         standard=(payload.get("standard") or standard_seed).strip(),
@@ -188,5 +233,49 @@ def _build_draft(
         next_action=(
             payload.get("next_action") or ""
         ).strip() or "Draft the first concrete step and share it with the owner today.",
-        source_refs=source_refs,
+        source_refs=_refs(context_chunks),
+    )
+
+
+def _build_unblock_draft(payload: dict, context_chunks: list[dict]) -> UnblockDraft:
+    alternatives_raw = payload.get("alternatives", [])
+    alternatives: list[dict] = []
+    if isinstance(alternatives_raw, list):
+        for alt in alternatives_raw:
+            if not isinstance(alt, dict):
+                continue
+            alternatives.append(
+                {
+                    "path": str(alt.get("path", "")).strip() or "Unnamed path",
+                    "solves": str(alt.get("solves", "")).strip(),
+                    "tradeoff": str(alt.get("tradeoff", "")).strip(),
+                    "first_step": str(alt.get("first_step", "")).strip(),
+                    "aligned_standard": str(alt.get("aligned_standard", "")).strip(),
+                }
+            )
+
+    # Enforce the contract of exactly 3 distinct alternatives.
+    while len(alternatives) < 3:
+        alternatives.append(
+            {
+                "path": f"Placeholder path {len(alternatives) + 1}",
+                "solves": "",
+                "tradeoff": "",
+                "first_step": "Clarify the blocker with the assigner.",
+                "aligned_standard": "Accountability",
+            }
+        )
+    alternatives = alternatives[:3]
+
+    return UnblockDraft(
+        blocker_summary=(payload.get("blocker_summary") or "").strip()
+        or "Blocker details not provided.",
+        root_cause_analysis=(payload.get("root_cause_analysis") or "").strip()
+        or "Root cause analysis unavailable; the LLM returned an empty response.",
+        alternatives=alternatives,
+        recommended_path=(payload.get("recommended_path") or "").strip()
+        or f"Path {alternatives[0]['path']}",
+        canon_reference=(payload.get("canon_reference") or "").strip()
+        or "Canon reference unavailable.",
+        source_refs=_refs(context_chunks),
     )

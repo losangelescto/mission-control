@@ -201,6 +201,19 @@ class Recommendation(Base):
     viable_options_json: Mapped[dict] = mapped_column(JSON, nullable=False)
     next_action: Mapped[str] = mapped_column(Text, nullable=False)
     source_refs_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    # `standard` (default) or `unblock`. The canonical output lives in
+    # `response_json`; the top-level columns above are kept populated for
+    # backward compatibility (unblock mode synthesises them from the
+    # recommended alternative).
+    recommendation_type: Mapped[str] = mapped_column(
+        String(50), nullable=False, server_default="standard"
+    )
+    # Hex sha256 of the normalised input context so we can detect that
+    # "nothing changed" without rebuilding the context every request.
+    input_context_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Full structured response, including the mode-specific keys
+    # (unblock analysis, recommendation_context metadata).
+    response_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

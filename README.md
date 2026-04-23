@@ -88,6 +88,12 @@ The full reference lives in [.env.example](.env.example). Highlights:
 | `RATE_LIMIT_ENABLED`        | Master switch for the slowapi rate limiter. |
 | `RATE_LIMIT_DEFAULT`        | Default per-IP limit (e.g. `100/minute`). |
 | `RATE_LIMIT_RECOMMENDATION` | Stricter limit for LLM-backed endpoints (default `10/minute`). |
+| `LLM_PROVIDER`              | `mock` (default) or `anthropic`. |
+| `LLM_API_KEY`               | Required when `LLM_PROVIDER=anthropic`. Stored in Key Vault in prod. |
+| `LLM_MODEL`                 | Model id. Default `claude-sonnet-4-6`. |
+| `LLM_MAX_TOKENS`            | Max output tokens per LLM call. Default `1500`. |
+| `LLM_TEMPERATURE`           | Sampling temperature. Default `0.3` (low — operational recommendations). |
+| `RECOMMENDATION_CACHE_SECONDS` | Cache window for `/tasks/{id}/recommendation`. Default `300`. Any task/update/sub-task/obstacle change busts the cache regardless. |
 | `NEXT_PUBLIC_API_URL`       | API base URL baked into the Next.js client bundle at build time. |
 
 ## Branch Strategy

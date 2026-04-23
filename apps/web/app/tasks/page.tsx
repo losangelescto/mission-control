@@ -7,6 +7,8 @@ import { TaskUpdateInput } from "./TaskUpdateInput";
 import { TaskStatusSelect } from "./TaskStatusSelect";
 import { ApproveCandidate } from "./ApproveCandidate";
 import { DismissCandidate } from "./DismissCandidate";
+import { SubTasks } from "./SubTasks";
+import { Obstacles } from "./Obstacles";
 
 type TasksPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -84,6 +86,13 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
 
   const recommendationHistory = selectedTask
     ? await apiClient.listTaskRecommendations(selectedTask.id).catch(() => [])
+    : [];
+
+  const subTasks = selectedTask
+    ? await apiClient.listSubTasks(selectedTask.id).catch(() => [])
+    : [];
+  const obstacles = selectedTask
+    ? await apiClient.listObstacles(selectedTask.id).catch(() => [])
     : [];
 
   const candidates = await apiClient.getTaskCandidates("pending_review").catch(() => []);
@@ -186,6 +195,18 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
           )}
         </article>
       </div>
+
+      {selectedTask ? (
+        <article className="panel">
+          <SubTasks taskId={selectedTask.id} initialSubTasks={subTasks} />
+        </article>
+      ) : null}
+
+      {selectedTask ? (
+        <article className="panel">
+          <Obstacles taskId={selectedTask.id} initialObstacles={obstacles} />
+        </article>
+      ) : null}
 
       {selectedTask ? (
         recommendation && recommendation.recommendation_type === "unblock" && recommendation.unblock_analysis ? (

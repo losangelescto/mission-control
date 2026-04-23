@@ -297,6 +297,9 @@ class RecommendationContextMeta(BaseModel):
     updates_included: int
     reviews_included: int
     blocker_active: bool
+    subtasks_total: int = 0
+    subtasks_completed: int = 0
+    active_obstacles: int = 0
 
 
 class RecommendationResponse(BaseModel):
@@ -504,5 +507,101 @@ class ReviewSessionResponse(BaseModel):
     cadence_type: str
     next_review_date: date | None
     created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ─── Sub-tasks ──────────────────────────────────────────────────────────
+
+
+SubTaskStatus = Literal["pending", "in_progress", "completed"]
+
+
+class SubTaskCreate(BaseModel):
+    title: str
+    description: str = ""
+    canon_reference: str = ""
+    status: SubTaskStatus = "pending"
+    order: int | None = None  # None → appended to the end
+
+
+class SubTaskUpdate(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    canon_reference: str | None = None
+    status: SubTaskStatus | None = None
+    order: int | None = None
+
+
+class SubTaskResponse(BaseModel):
+    id: int
+    parent_task_id: int
+    title: str
+    description: str
+    status: str
+    order: int
+    canon_reference: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SubTaskDraft(BaseModel):
+    """A proposed sub-task from the LLM, not yet persisted."""
+    title: str
+    description: str
+    canon_reference: str
+
+
+class SubTaskGeneratePreviewResponse(BaseModel):
+    task_id: int
+    drafts: list[SubTaskDraft]
+
+
+# ─── Obstacles ──────────────────────────────────────────────────────────
+
+
+ObstacleStatus = Literal["active", "resolved"]
+ObstacleSolutionSource = Literal["manual", "ai_generated"]
+
+
+class ObstacleSolution(BaseModel):
+    solution: str
+    trade_off: str = ""
+    first_step: str = ""
+    aligned_standard: str = ""
+    source: ObstacleSolutionSource = "manual"
+
+
+class ObstacleCreate(BaseModel):
+    description: str
+    impact: str = ""
+    identified_by: str = "user"
+    proposed_solutions: list[ObstacleSolution] = []
+
+
+class ObstacleUpdate(BaseModel):
+    description: str | None = None
+    impact: str | None = None
+    status: ObstacleStatus | None = None
+    resolution_notes: str | None = None
+
+
+class ObstacleResolveRequest(BaseModel):
+    resolution_notes: str
+
+
+class ObstacleResponse(BaseModel):
+    id: int
+    task_id: int
+    description: str
+    impact: str
+    status: str
+    proposed_solutions: list[ObstacleSolution]
+    resolution_notes: str
+    identified_at: datetime
+    resolved_at: datetime | None
+    identified_by: str
 
     model_config = ConfigDict(from_attributes=True)

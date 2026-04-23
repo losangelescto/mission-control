@@ -176,6 +176,57 @@ export type RecommendationContextMeta = {
   updates_included: number;
   reviews_included: number;
   blocker_active: boolean;
+  subtasks_total: number;
+  subtasks_completed: number;
+  active_obstacles: number;
+};
+
+export type SubTaskStatus = "pending" | "in_progress" | "completed";
+
+export type SubTask = {
+  id: number;
+  parent_task_id: number;
+  title: string;
+  description: string;
+  status: SubTaskStatus;
+  order: number;
+  canon_reference: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SubTaskDraft = {
+  title: string;
+  description: string;
+  canon_reference: string;
+};
+
+export type SubTaskGeneratePreviewResponse = {
+  task_id: number;
+  drafts: SubTaskDraft[];
+};
+
+export type ObstacleStatus = "active" | "resolved";
+
+export type ObstacleSolution = {
+  solution: string;
+  trade_off: string;
+  first_step: string;
+  aligned_standard: string;
+  source: "manual" | "ai_generated";
+};
+
+export type Obstacle = {
+  id: number;
+  task_id: number;
+  description: string;
+  impact: string;
+  status: ObstacleStatus;
+  proposed_solutions: ObstacleSolution[];
+  resolution_notes: string;
+  identified_at: string;
+  resolved_at: string | null;
+  identified_by: string;
 };
 
 export type Recommendation = {

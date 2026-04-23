@@ -17,10 +17,12 @@ from app.models import (
     AuditEvent,
     Blocker,
     Delegation,
+    Obstacle,
     Recommendation,
     ReviewSession,
     SourceChunk,
     SourceDocument,
+    SubTask,
     Task,
     TaskUpdate,
 )
@@ -41,6 +43,8 @@ def _build_test_db() -> tuple[sessionmaker, object]:
     Delegation.__table__.create(bind=engine)
     ReviewSession.__table__.create(bind=engine)
     Recommendation.__table__.create(bind=engine)
+    SubTask.__table__.create(bind=engine)
+    Obstacle.__table__.create(bind=engine)
     AuditEvent.__table__.create(bind=engine)
     return TestingSessionLocal, engine
 

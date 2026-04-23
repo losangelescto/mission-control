@@ -25,9 +25,11 @@ from app.models import (
     Delegation,
     MailboxMessage,
     MailboxThread,
+    Obstacle,
     RecurrenceTemplate,
     Recommendation,
     SourceDocument,
+    SubTask,
     Task,
     TaskCandidate,
     TaskUpdate,
@@ -1275,6 +1277,8 @@ def _compute_context_hash(
     blocker: dict | None,
     reviews: list[dict],
     mode: str,
+    subtasks: list[dict] | None = None,
+    active_obstacles: list[dict] | None = None,
 ) -> str:
     """Hex sha256 of the normalised input bundle.
 
@@ -1297,6 +1301,10 @@ def _compute_context_hash(
             {"sid": c.get("source_document_id"), "ix": c.get("chunk_index")}
             for c in canon_chunks
         ],
+        "subtasks": [
+            {"id": s.get("id"), "status": s.get("status")} for s in (subtasks or [])
+        ],
+        "obstacles": [{"id": o.get("id")} for o in (active_obstacles or [])],
     }
     raw = _json.dumps(bundle, sort_keys=True, default=str)
     return _hashlib.sha256(raw.encode("utf-8")).hexdigest()
@@ -1337,6 +1345,35 @@ def generate_task_recommendation(
     history_summary = _task_history_summary(db, task)
     task_dict = _task_to_context_dict(task)
 
+    # Sub-task progress and active obstacles — Phase 2 Day 3 additions.
+    # These feed the prompt so the LLM can reason about already-tried work
+    # and currently-known blockers instead of repeating itself.
+    from app.repositories import (
+        list_active_obstacles_for_task,
+        list_sub_tasks_for_task,
+    )
+
+    subtask_rows = list_sub_tasks_for_task(db, task.id)
+    subtask_dicts = [
+        {
+            "id": s.id,
+            "title": s.title,
+            "status": s.status,
+            "canon_reference": s.canon_reference,
+        }
+        for s in subtask_rows
+    ]
+    obstacle_rows = list_active_obstacles_for_task(db, task.id)
+    obstacle_dicts = [
+        {
+            "id": o.id,
+            "description": o.description,
+            "impact": o.impact,
+            "proposed_solutions": o.proposed_solutions or [],
+        }
+        for o in obstacle_rows
+    ]
+
     # Build a retrieval query from the task + recent update summaries so the
     # canon chunks we pull reflect what has actually happened lately.
     update_text_for_query = "\n".join(f"- {u['summary']}" for u in recent_updates)
@@ -1374,6 +1411,8 @@ def generate_task_recommendation(
         blocker=blocker,
         reviews=recent_reviews,
         mode=mode,
+        subtasks=subtask_dicts,
+        active_obstacles=obstacle_dicts,
     )
 
     # ─── Cache: return last rec if fresh AND same input hash ───
@@ -1399,11 +1438,16 @@ def generate_task_recommendation(
 
     # ─── Call the provider in the correct mode ───
     provider = ai_provider or get_ai_provider()
+    subtask_total = len(subtask_dicts)
+    subtask_completed = sum(1 for s in subtask_dicts if s.get("status") == "completed")
     recommendation_context_meta = {
         "canon_chunks_used": len(context),
         "updates_included": len(recent_updates),
         "reviews_included": len(recent_reviews),
         "blocker_active": is_blocked or bool(blocker),
+        "subtasks_total": subtask_total,
+        "subtasks_completed": subtask_completed,
+        "active_obstacles": len(obstacle_dicts),
     }
 
     if is_blocked:
@@ -1413,6 +1457,8 @@ def generate_task_recommendation(
             blocker=blocker,
             reviews=recent_reviews,
             history_summary=history_summary,
+            subtasks=subtask_dicts,
+            active_obstacles=obstacle_dicts,
         )
         unblock_user = build_unblock_user_message(task=task_dict)
         unblock = provider.generate_unblock(
@@ -1462,6 +1508,8 @@ def generate_task_recommendation(
             blocker=blocker,
             reviews=recent_reviews,
             history_summary=history_summary,
+            subtasks=subtask_dicts,
+            active_obstacles=obstacle_dicts,
         )
         standard_user = build_standard_user_message(
             task=task_dict,
@@ -1765,3 +1813,249 @@ def get_metrics_by_owner(db: Session) -> list[dict]:
             }
         )
     return owners
+
+
+# ─── Sub-tasks ──────────────────────────────────────────────────────────
+
+
+def create_sub_task_for_task(db: Session, task_id: int, payload: dict) -> SubTask | None:
+    task = get_task_by_id(db, task_id)
+    if task is None:
+        return None
+    from app.repositories import create_sub_task, next_sub_task_order
+
+    ordering = payload.get("order")
+    if ordering is None:
+        ordering = next_sub_task_order(db, task_id)
+    row = create_sub_task(
+        db,
+        {
+            "parent_task_id": task_id,
+            "title": payload["title"],
+            "description": payload.get("description", "") or "",
+            "status": payload.get("status", "pending") or "pending",
+            "order": ordering,
+            "canon_reference": payload.get("canon_reference", "") or "",
+        },
+    )
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def list_sub_tasks(db: Session, task_id: int) -> list[SubTask] | None:
+    from app.repositories import list_sub_tasks_for_task
+
+    task = get_task_by_id(db, task_id)
+    if task is None:
+        return None
+    return list_sub_tasks_for_task(db, task_id)
+
+
+def update_sub_task_by_id(db: Session, sub_task_id: int, updates: dict) -> SubTask | None:
+    from app.repositories import get_sub_task_by_id, update_sub_task
+
+    sub_task = get_sub_task_by_id(db, sub_task_id)
+    if sub_task is None:
+        return None
+    scrubbed = {k: v for k, v in updates.items() if v is not None}
+    update_sub_task(db, sub_task, scrubbed)
+    db.commit()
+    db.refresh(sub_task)
+    return sub_task
+
+
+def delete_sub_task_by_id(db: Session, sub_task_id: int) -> bool:
+    from app.repositories import delete_sub_task, get_sub_task_by_id
+
+    sub_task = get_sub_task_by_id(db, sub_task_id)
+    if sub_task is None:
+        return False
+    delete_sub_task(db, sub_task)
+    db.commit()
+    return True
+
+
+def generate_sub_tasks_preview(
+    db: Session,
+    task_id: int,
+    *,
+    ai_provider: AIProvider | None = None,
+    embeddings_adapter: EmbeddingsAdapter | None = None,
+) -> list[dict] | None:
+    """Return a list of sub-task drafts (NOT persisted) for frontend preview.
+
+    The frontend renders the drafts, lets the user edit/accept, then calls
+    the standard POST /tasks/{id}/subtasks endpoint for each accepted one
+    (or batches). We deliberately do not persist here so the user stays in
+    control of what ends up in the sub-task list.
+    """
+    from app.canon_context import build_subtask_system_prompt, build_subtask_user_message
+
+    task = get_task_by_id(db, task_id)
+    if task is None:
+        return None
+
+    canon_chunks = retrieve_search(
+        db,
+        query=f"{task.objective}\n{task.standard}\n{task.description}",
+        active_canon_only=True,
+        source_types=None,
+        embeddings_adapter=embeddings_adapter,
+        top_k=5,
+    )
+    task_dict = _task_to_context_dict(task)
+    system_prompt = build_subtask_system_prompt(canon_chunks)
+    user_message = build_subtask_user_message(task=task_dict)
+
+    provider = ai_provider or get_ai_provider()
+    drafts = provider.generate_subtasks(
+        system_prompt=system_prompt,
+        user_message=user_message,
+    )
+    return [
+        {"title": d.title, "description": d.description, "canon_reference": d.canon_reference}
+        for d in drafts
+    ]
+
+
+# ─── Obstacles ─────────────────────────────────────────────────────────
+
+
+def create_obstacle_for_task(db: Session, task_id: int, payload: dict) -> Obstacle | None:
+    from app.repositories import create_obstacle
+
+    task = get_task_by_id(db, task_id)
+    if task is None:
+        return None
+    proposed = payload.get("proposed_solutions") or []
+    # Normalise pydantic models → dicts if they leaked through.
+    normalised_solutions = [
+        s.model_dump() if hasattr(s, "model_dump") else dict(s)
+        for s in proposed
+    ]
+    row = create_obstacle(
+        db,
+        {
+            "task_id": task_id,
+            "description": payload["description"],
+            "impact": payload.get("impact", "") or "",
+            "status": "active",
+            "proposed_solutions": normalised_solutions,
+            "resolution_notes": "",
+            "identified_by": payload.get("identified_by", "user") or "user",
+        },
+    )
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def list_obstacles(db: Session, task_id: int) -> list[Obstacle] | None:
+    from app.repositories import list_obstacles_for_task
+
+    task = get_task_by_id(db, task_id)
+    if task is None:
+        return None
+    return list_obstacles_for_task(db, task_id)
+
+
+def update_obstacle_by_id(db: Session, obstacle_id: int, updates: dict) -> Obstacle | None:
+    from app.repositories import get_obstacle_by_id, update_obstacle
+
+    obstacle = get_obstacle_by_id(db, obstacle_id)
+    if obstacle is None:
+        return None
+    scrubbed = {k: v for k, v in updates.items() if v is not None}
+    update_obstacle(db, obstacle, scrubbed)
+    db.commit()
+    db.refresh(obstacle)
+    return obstacle
+
+
+def resolve_obstacle_by_id(
+    db: Session, obstacle_id: int, resolution_notes: str
+) -> Obstacle | None:
+    from app.repositories import get_obstacle_by_id, update_obstacle
+
+    obstacle = get_obstacle_by_id(db, obstacle_id)
+    if obstacle is None:
+        return None
+    update_obstacle(
+        db,
+        obstacle,
+        {
+            "status": "resolved",
+            "resolution_notes": resolution_notes,
+            "resolved_at": datetime.now(UTC),
+        },
+    )
+    db.commit()
+    db.refresh(obstacle)
+    return obstacle
+
+
+def analyze_obstacle_by_id(
+    db: Session,
+    obstacle_id: int,
+    *,
+    ai_provider: AIProvider | None = None,
+    embeddings_adapter: EmbeddingsAdapter | None = None,
+) -> Obstacle | None:
+    """Run AI analysis on an obstacle and replace its proposed_solutions.
+
+    Uses the same unblock-mode prompt as Day-2 recommendations. The three
+    returned alternatives are mapped onto the ObstacleSolution shape and
+    stored on the row.
+    """
+    from app.canon_context import (
+        build_obstacle_system_prompt,
+        build_obstacle_user_message,
+    )
+    from app.repositories import get_obstacle_by_id, update_obstacle
+
+    obstacle = get_obstacle_by_id(db, obstacle_id)
+    if obstacle is None:
+        return None
+    task = get_task_by_id(db, obstacle.task_id)
+    if task is None:
+        return None
+
+    canon_chunks = retrieve_search(
+        db,
+        query=f"{task.objective}\n{task.standard}\n{obstacle.description}",
+        active_canon_only=True,
+        source_types=None,
+        embeddings_adapter=embeddings_adapter,
+        top_k=5,
+    )
+    task_dict = _task_to_context_dict(task)
+    system_prompt = build_obstacle_system_prompt(canon_chunks)
+    user_message = build_obstacle_user_message(
+        task=task_dict,
+        obstacle_description=obstacle.description,
+        obstacle_impact=obstacle.impact,
+    )
+
+    provider = ai_provider or get_ai_provider()
+    unblock = provider.generate_unblock(
+        system_prompt=system_prompt,
+        user_message=user_message,
+        context_chunks=canon_chunks,
+    )
+
+    solutions = [
+        {
+            "solution": alt.get("solves") or alt.get("path", ""),
+            "trade_off": alt.get("tradeoff", ""),
+            "first_step": alt.get("first_step", ""),
+            "aligned_standard": alt.get("aligned_standard", ""),
+            "source": "ai_generated",
+        }
+        for alt in unblock.alternatives
+    ]
+
+    update_obstacle(db, obstacle, {"proposed_solutions": solutions})
+    db.commit()
+    db.refresh(obstacle)
+    return obstacle

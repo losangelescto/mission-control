@@ -190,6 +190,62 @@ class TaskCandidate(Base):
     )
 
 
+class SubTask(Base):
+    """A concrete action step that belongs to a parent task.
+
+    Sub-tasks are ordered (see ``order``) and one level deep — we do not
+    model sub-sub-tasks. They are independently completable; finishing the
+    last sub-task does not auto-complete the parent. ``canon_reference``
+    is free-form text so the LLM can write either a Standard name
+    ("Consistency") or a longer citation ("Founding Charter §3").
+    """
+
+    __tablename__ = "sub_tasks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    parent_task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id"), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    status: Mapped[str] = mapped_column(String(50), nullable=False, server_default="pending")
+    order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    canon_reference: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class Obstacle(Base):
+    """A specific thing blocking a task, with proposed solutions.
+
+    Distinct from ``Blocker`` (the Phase-1 open/closed state flag on a task):
+    an Obstacle is a richer record of what is in the way, why it matters,
+    and concrete first-principles alternatives for moving forward.
+    ``proposed_solutions`` is a JSON array of dicts, each shaped like:
+    ``{solution, trade_off, first_step, aligned_standard, source}``.
+    """
+
+    __tablename__ = "obstacles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id"), nullable=False, index=True)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    impact: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    status: Mapped[str] = mapped_column(String(50), nullable=False, server_default="active")
+    proposed_solutions: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    resolution_notes: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    identified_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    identified_by: Mapped[str] = mapped_column(String(255), nullable=False, server_default="system")
+
+
 class Recommendation(Base):
     __tablename__ = "recommendations"
 

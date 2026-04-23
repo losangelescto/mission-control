@@ -12,10 +12,12 @@ from app.models import (
     AuditEvent,
     Blocker,
     Delegation,
+    Obstacle,
     Recommendation,
     ReviewSession,
     SourceChunk,
     SourceDocument,
+    SubTask,
     Task,
     TaskUpdate,
 )
@@ -36,6 +38,8 @@ def test_embed_retrieve_and_recommendation_routes(tmp_path) -> None:  # type: ig
     Delegation.__table__.create(bind=engine)
     ReviewSession.__table__.create(bind=engine)
     Recommendation.__table__.create(bind=engine)
+    SubTask.__table__.create(bind=engine)
+    Obstacle.__table__.create(bind=engine)
     AuditEvent.__table__.create(bind=engine)
 
     settings = get_settings()

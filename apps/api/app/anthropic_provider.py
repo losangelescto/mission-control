@@ -21,7 +21,13 @@ import logging
 import re
 from typing import Any
 
-from app.providers import AIProvider, MockAIProvider, RecommendationDraft, UnblockDraft
+from app.providers import (
+    AIProvider,
+    MockAIProvider,
+    RecommendationDraft,
+    SubTaskDraftItem,
+    UnblockDraft,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +157,28 @@ class AnthropicProvider:
             )
             return fallback
 
+    def generate_subtasks(
+        self,
+        *,
+        system_prompt: str,
+        user_message: str,
+    ) -> list[SubTaskDraftItem]:
+        try:
+            payload = self._call_llm(system_prompt, user_message)
+            return _build_subtask_drafts(payload)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "anthropic subtask generation failed; returning mock fallback",
+                extra={
+                    "event": "anthropic_subtasks_failed",
+                    "context": {"error": str(exc), "model": self._model},
+                },
+            )
+            return self._fallback.generate_subtasks(
+                system_prompt=system_prompt,
+                user_message=user_message,
+            )
+
     def _call_llm(self, system_prompt: str, user_message: str) -> dict:
         client = self._get_client()
         response = client.messages.create(
@@ -235,6 +263,40 @@ def _build_standard_draft(
         ).strip() or "Draft the first concrete step and share it with the owner today.",
         source_refs=_refs(context_chunks),
     )
+
+
+def _build_subtask_drafts(payload: dict) -> list[SubTaskDraftItem]:
+    # Accept either {subtasks: [...]} or a raw list at the root.
+    raw = payload.get("subtasks") if isinstance(payload, dict) else None
+    if raw is None and isinstance(payload, list):
+        raw = payload
+    if not isinstance(raw, list):
+        raw = []
+
+    drafts: list[SubTaskDraftItem] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title", "")).strip()
+        if not title:
+            continue
+        drafts.append(
+            SubTaskDraftItem(
+                title=title,
+                description=str(item.get("description", "")).strip(),
+                canon_reference=str(item.get("canon_reference", "")).strip()
+                or str(item.get("aligned_standard", "")).strip(),
+            )
+        )
+
+    # Floor: the contract says 3-7 steps. Pad from the mock if the LLM
+    # undershoots so the UI always has something to render.
+    if len(drafts) < 3:
+        for extra in MockAIProvider().generate_subtasks(system_prompt="", user_message=""):
+            if len(drafts) >= 3:
+                break
+            drafts.append(extra)
+    return drafts[:7]
 
 
 def _build_unblock_draft(payload: dict, context_chunks: list[dict]) -> UnblockDraft:

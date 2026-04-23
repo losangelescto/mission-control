@@ -3,9 +3,12 @@ import {
   DailyReview,
   MetricsByOwner,
   MetricsSummary,
+  Obstacle,
   Recommendation,
   RecommendationHistoryItem,
   ReviewSession,
+  SubTask,
+  SubTaskGeneratePreviewResponse,
   SourceDocument,
   StandardScore,
   Task,
@@ -158,5 +161,69 @@ export const apiClient = {
     if (params?.period) q.set("period", params.period);
     const query = q.toString();
     return apiFetch<StandardScore[]>(`/standard-scores${query ? `?${query}` : ""}`);
+  },
+
+  async listSubTasks(taskId: number): Promise<SubTask[]> {
+    return apiFetch<SubTask[]>(`/tasks/${taskId}/subtasks`);
+  },
+
+  async createSubTask(
+    taskId: number,
+    payload: { title: string; description?: string; canon_reference?: string },
+  ): Promise<SubTask> {
+    return apiFetch<SubTask>(`/tasks/${taskId}/subtasks`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async updateSubTask(
+    subTaskId: number,
+    payload: { title?: string; description?: string; status?: string; canon_reference?: string; order?: number },
+  ): Promise<SubTask> {
+    return apiFetch<SubTask>(`/subtasks/${subTaskId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async deleteSubTask(subTaskId: number): Promise<void> {
+    await fetch(`${API_BASE_URL}/subtasks/${subTaskId}`, {
+      method: "DELETE",
+    });
+  },
+
+  async generateSubTasks(taskId: number): Promise<SubTaskGeneratePreviewResponse> {
+    return apiFetch<SubTaskGeneratePreviewResponse>(
+      `/tasks/${taskId}/subtasks/generate`,
+      { method: "POST" },
+    );
+  },
+
+  async listObstacles(taskId: number): Promise<Obstacle[]> {
+    return apiFetch<Obstacle[]>(`/tasks/${taskId}/obstacles`);
+  },
+
+  async createObstacle(
+    taskId: number,
+    payload: { description: string; impact?: string; identified_by?: string },
+  ): Promise<Obstacle> {
+    return apiFetch<Obstacle>(`/tasks/${taskId}/obstacles`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async analyzeObstacle(obstacleId: number): Promise<Obstacle> {
+    return apiFetch<Obstacle>(`/obstacles/${obstacleId}/analyze`, {
+      method: "POST",
+    });
+  },
+
+  async resolveObstacle(obstacleId: number, resolutionNotes: string): Promise<Obstacle> {
+    return apiFetch<Obstacle>(`/obstacles/${obstacleId}/resolve`, {
+      method: "POST",
+      body: JSON.stringify({ resolution_notes: resolutionNotes }),
+    });
   },
 };

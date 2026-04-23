@@ -70,6 +70,14 @@ from app.schemas import (
     ReviewSessionResponse,
     StandardScoreCreate,
     StandardScoreResponse,
+    SubTaskCreate,
+    SubTaskGeneratePreviewResponse,
+    SubTaskResponse,
+    SubTaskUpdate,
+    ObstacleCreate,
+    ObstacleResolveRequest,
+    ObstacleResponse,
+    ObstacleUpdate,
 )
 from app.task_candidate_extraction import AIExtractionInterface
 from app.repositories import (
@@ -103,8 +111,18 @@ from app.services import (
     ingest_call_artifact_upload,
     list_call_artifacts,
     ingest_source_upload,
+    analyze_obstacle_by_id,
+    create_obstacle_for_task,
+    create_sub_task_for_task,
+    delete_sub_task_by_id,
+    generate_sub_tasks_preview,
+    list_obstacles,
+    list_sub_tasks,
     list_task_candidates,
     list_task_recommendations,
+    resolve_obstacle_by_id,
+    update_obstacle_by_id,
+    update_sub_task_by_id,
     list_source_documents,
     list_recurrence_templates,
     list_task_updates,
@@ -859,3 +877,125 @@ def list_standard_scores_route(
 ) -> list[StandardScoreResponse]:
     scores = repo_list_standard_scores(db, scope_type=scope_type, scope_id=scope_id, metric_type=metric_type, period=period)
     return [StandardScoreResponse.model_validate(s) for s in scores]
+
+
+# ─── Sub-tasks ──────────────────────────────────────────────────────────
+
+
+@router.post(
+    "/tasks/{task_id}/subtasks",
+    response_model=SubTaskResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_sub_task_route(
+    task_id: int, payload: SubTaskCreate, db: Session = Depends(get_db)
+) -> SubTaskResponse:
+    row = create_sub_task_for_task(db, task_id=task_id, payload=payload.model_dump())
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="task not found")
+    return SubTaskResponse.model_validate(row)
+
+
+@router.get("/tasks/{task_id}/subtasks", response_model=list[SubTaskResponse])
+def list_sub_tasks_route(
+    task_id: int, db: Session = Depends(get_db)
+) -> list[SubTaskResponse]:
+    rows = list_sub_tasks(db, task_id)
+    if rows is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="task not found")
+    return [SubTaskResponse.model_validate(r) for r in rows]
+
+
+@router.patch("/subtasks/{sub_task_id}", response_model=SubTaskResponse)
+def update_sub_task_route(
+    sub_task_id: int, payload: SubTaskUpdate, db: Session = Depends(get_db)
+) -> SubTaskResponse:
+    row = update_sub_task_by_id(db, sub_task_id, payload.model_dump(exclude_unset=True))
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="sub-task not found")
+    return SubTaskResponse.model_validate(row)
+
+
+@router.delete("/subtasks/{sub_task_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_sub_task_route(sub_task_id: int, db: Session = Depends(get_db)) -> None:
+    ok = delete_sub_task_by_id(db, sub_task_id)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="sub-task not found")
+
+
+@router.post(
+    "/tasks/{task_id}/subtasks/generate",
+    response_model=SubTaskGeneratePreviewResponse,
+)
+@limiter.limit(lambda: get_settings().rate_limit_recommendation)
+def generate_sub_tasks_preview_route(
+    request: Request,
+    task_id: int,
+    db: Session = Depends(get_db),
+) -> SubTaskGeneratePreviewResponse:
+    drafts = generate_sub_tasks_preview(db, task_id=task_id)
+    if drafts is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="task not found")
+    return SubTaskGeneratePreviewResponse(task_id=task_id, drafts=drafts)
+
+
+# ─── Obstacles ─────────────────────────────────────────────────────────
+
+
+@router.post(
+    "/tasks/{task_id}/obstacles",
+    response_model=ObstacleResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_obstacle_route(
+    task_id: int, payload: ObstacleCreate, db: Session = Depends(get_db)
+) -> ObstacleResponse:
+    row = create_obstacle_for_task(db, task_id=task_id, payload=payload.model_dump())
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="task not found")
+    return ObstacleResponse.model_validate(row)
+
+
+@router.get("/tasks/{task_id}/obstacles", response_model=list[ObstacleResponse])
+def list_obstacles_route(
+    task_id: int, db: Session = Depends(get_db)
+) -> list[ObstacleResponse]:
+    rows = list_obstacles(db, task_id)
+    if rows is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="task not found")
+    return [ObstacleResponse.model_validate(r) for r in rows]
+
+
+@router.patch("/obstacles/{obstacle_id}", response_model=ObstacleResponse)
+def update_obstacle_route(
+    obstacle_id: int, payload: ObstacleUpdate, db: Session = Depends(get_db)
+) -> ObstacleResponse:
+    row = update_obstacle_by_id(db, obstacle_id, payload.model_dump(exclude_unset=True))
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="obstacle not found")
+    return ObstacleResponse.model_validate(row)
+
+
+@router.post("/obstacles/{obstacle_id}/analyze", response_model=ObstacleResponse)
+@limiter.limit(lambda: get_settings().rate_limit_recommendation)
+def analyze_obstacle_route(
+    request: Request,
+    obstacle_id: int,
+    db: Session = Depends(get_db),
+) -> ObstacleResponse:
+    row = analyze_obstacle_by_id(db, obstacle_id)
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="obstacle not found")
+    return ObstacleResponse.model_validate(row)
+
+
+@router.post("/obstacles/{obstacle_id}/resolve", response_model=ObstacleResponse)
+def resolve_obstacle_route(
+    obstacle_id: int,
+    payload: ObstacleResolveRequest,
+    db: Session = Depends(get_db),
+) -> ObstacleResponse:
+    row = resolve_obstacle_by_id(db, obstacle_id, resolution_notes=payload.resolution_notes)
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="obstacle not found")
+    return ObstacleResponse.model_validate(row)

@@ -10,12 +10,14 @@ from app.models import (
     CallArtifact,
     DailyRollup,
     Delegation,
+    Obstacle,
     RecurrenceOccurrence,
     RecurrenceTemplate,
     ReviewSession,
     StandardScore,
     SourceChunk,
     SourceDocument,
+    SubTask,
     Task,
     TaskCandidate,
     TaskUpdate,
@@ -376,3 +378,93 @@ def get_call_artifact_by_id(db: Session, call_artifact_id: int) -> CallArtifact 
 
 def list_call_artifacts(db: Session) -> list[CallArtifact]:
     return list(db.scalars(select(CallArtifact).order_by(CallArtifact.id.asc())).all())
+
+
+# ─── Sub-tasks ──────────────────────────────────────────────────────────
+
+
+def create_sub_task(db: Session, payload: dict) -> SubTask:
+    sub_task = SubTask(**payload)
+    db.add(sub_task)
+    db.flush()
+    return sub_task
+
+
+def list_sub_tasks_for_task(db: Session, task_id: int) -> list[SubTask]:
+    stmt = (
+        select(SubTask)
+        .where(SubTask.parent_task_id == task_id)
+        .order_by(SubTask.order.asc(), SubTask.id.asc())
+    )
+    return list(db.scalars(stmt).all())
+
+
+def get_sub_task_by_id(db: Session, sub_task_id: int) -> SubTask | None:
+    return db.get(SubTask, sub_task_id)
+
+
+def update_sub_task(db: Session, sub_task: SubTask, updates: dict) -> SubTask:
+    for key, value in updates.items():
+        if hasattr(sub_task, key):
+            setattr(sub_task, key, value)
+    db.add(sub_task)
+    db.flush()
+    return sub_task
+
+
+def delete_sub_task(db: Session, sub_task: SubTask) -> None:
+    db.delete(sub_task)
+    db.flush()
+
+
+def next_sub_task_order(db: Session, task_id: int) -> int:
+    stmt = (
+        select(SubTask.order)
+        .where(SubTask.parent_task_id == task_id)
+        .order_by(SubTask.order.desc())
+        .limit(1)
+    )
+    current_max = db.scalar(stmt)
+    return 0 if current_max is None else current_max + 1
+
+
+# ─── Obstacles ──────────────────────────────────────────────────────────
+
+
+def create_obstacle(db: Session, payload: dict) -> Obstacle:
+    obstacle = Obstacle(**payload)
+    db.add(obstacle)
+    db.flush()
+    return obstacle
+
+
+def list_obstacles_for_task(db: Session, task_id: int) -> list[Obstacle]:
+    stmt = (
+        select(Obstacle)
+        .where(Obstacle.task_id == task_id)
+        .order_by(Obstacle.identified_at.desc(), Obstacle.id.desc())
+    )
+    return list(db.scalars(stmt).all())
+
+
+def list_active_obstacles_for_task(db: Session, task_id: int) -> list[Obstacle]:
+    stmt = (
+        select(Obstacle)
+        .where(Obstacle.task_id == task_id)
+        .where(Obstacle.status == "active")
+        .order_by(Obstacle.identified_at.desc(), Obstacle.id.desc())
+    )
+    return list(db.scalars(stmt).all())
+
+
+def get_obstacle_by_id(db: Session, obstacle_id: int) -> Obstacle | None:
+    return db.get(Obstacle, obstacle_id)
+
+
+def update_obstacle(db: Session, obstacle: Obstacle, updates: dict) -> Obstacle:
+    for key, value in updates.items():
+        if hasattr(obstacle, key):
+            setattr(obstacle, key, value)
+    db.add(obstacle)
+    db.flush()
+    return obstacle

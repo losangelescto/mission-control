@@ -19,6 +19,19 @@ class RecommendationDraft:
 
 
 @dataclass
+class SubTaskDraftItem:
+    """One proposed sub-task from the LLM — not yet persisted.
+
+    ``canon_reference`` captures which Standard or canon section justifies
+    the step, and ``description`` doubles as the "what 'done' looks like"
+    criterion — we keep the shape lean instead of adding a separate column.
+    """
+    title: str
+    description: str
+    canon_reference: str
+
+
+@dataclass
 class UnblockDraft:
     """Structured output when the recommendation engine is in unblock mode.
 
@@ -57,6 +70,14 @@ class AIProvider(Protocol):
         user_message: str,
         context_chunks: list[dict],
     ) -> UnblockDraft:
+        ...
+
+    def generate_subtasks(
+        self,
+        *,
+        system_prompt: str,
+        user_message: str,
+    ) -> list[SubTaskDraftItem]:
         ...
 
 
@@ -142,6 +163,40 @@ class MockAIProvider:
             canon_reference="Canon: pick the lowest-risk path that still closes the loop.",
             source_refs=refs,
         )
+
+
+    def generate_subtasks(
+        self,
+        *,
+        system_prompt: str,
+        user_message: str,
+    ) -> list[SubTaskDraftItem]:
+        return [
+            SubTaskDraftItem(
+                title="Clarify the outcome in one sentence",
+                description=(
+                    "Write the target outcome so everyone can see it. "
+                    "Done when the sentence is pinned at the top of the task."
+                ),
+                canon_reference="Anticipation",
+            ),
+            SubTaskDraftItem(
+                title="Identify the smallest next action",
+                description=(
+                    "Pick the one move that unblocks everything else. "
+                    "Done when the action is specific and scheduled."
+                ),
+                canon_reference="Ownership",
+            ),
+            SubTaskDraftItem(
+                title="Close the loop with the assigner",
+                description=(
+                    "Confirm the expected standard and the definition of done. "
+                    "Done when the assigner has acknowledged in writing."
+                ),
+                canon_reference="Accountability",
+            ),
+        ]
 
 
 def _refs_from_chunks(context_chunks: list[dict]) -> list[dict]:

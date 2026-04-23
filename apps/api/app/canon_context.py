@@ -202,6 +202,8 @@ def build_standard_system_prompt(
     blocker: dict | None,
     reviews: Sequence[dict],
     history_summary: dict | None,
+    subtasks: Sequence[dict] | None = None,
+    active_obstacles: Sequence[dict] | None = None,
 ) -> str:
     """Return the full system prompt for a standard recommendation call."""
     sections = [
@@ -213,6 +215,8 @@ def build_standard_system_prompt(
         _format_blocker(blocker),
         _format_reviews(reviews),
         _format_history_summary(history_summary),
+        format_subtask_progress(subtasks or []),
+        format_active_obstacles(active_obstacles or []),
     ]
     return "\n\n---\n\n".join(s for s in sections if s)
 
@@ -244,6 +248,8 @@ def build_unblock_system_prompt(
     blocker: dict | None,
     reviews: Sequence[dict],
     history_summary: dict | None,
+    subtasks: Sequence[dict] | None = None,
+    active_obstacles: Sequence[dict] | None = None,
 ) -> str:
     """Return the full system prompt for an unblock-mode call."""
     sections = [
@@ -255,6 +261,8 @@ def build_unblock_system_prompt(
         _format_blocker(blocker),
         _format_reviews(reviews),
         _format_history_summary(history_summary),
+        format_subtask_progress(subtasks or []),
+        format_active_obstacles(active_obstacles or []),
     ]
     return "\n\n---\n\n".join(s for s in sections if s)
 
@@ -268,6 +276,127 @@ def build_unblock_user_message(*, task: dict) -> str:
         + "Produce the unblock-mode JSON recommendation now. Three distinct "
         + "alternatives are required — not three variations of the same idea."
     )
+
+
+# ─── Sub-task generation ────────────────────────────────────────────────
+
+
+_SUBTASK_INSTRUCTIONS = """SUB-TASK GENERATION MODE:
+
+Break the task below into 3-7 concrete action steps. Each step must:
+- Be a specific action the owner can execute, not a vague intention.
+- Align to a single Standard from The Uncommon Pursuit (see below).
+- State what "done" looks like in the description.
+
+Output schema — return a JSON object with EXACTLY this key:
+  "subtasks": JSON array of 3-7 objects, each with:
+    "title":             one short action-oriented sentence
+    "description":       what to do, why it matters, and what "done" looks like
+    "canon_reference":   the Standard this step serves, by name (one of the Seven)
+"""
+
+
+def build_subtask_system_prompt(canon_chunks: Sequence[dict]) -> str:
+    sections = [
+        _SHARED_VOICE,
+        _SUBTASK_INSTRUCTIONS,
+        _format_seven_standards(),
+        _format_retrieved_chunks(canon_chunks),
+    ]
+    return "\n\n---\n\n".join(sections)
+
+
+def build_subtask_user_message(*, task: dict) -> str:
+    return (
+        _format_task_header(task)
+        + "\n\n"
+        + f"Description:\n{task.get('description', '').strip()}\n"
+        + "\n"
+        + "Produce the sub-task JSON now."
+    )
+
+
+# ─── Obstacle analysis (reuses unblock instructions for consistency) ────
+
+
+_OBSTACLE_INSTRUCTIONS = """OBSTACLE ANALYSIS MODE:
+
+A specific obstacle is described below. Generate EXACTLY three first-principles
+alternatives for moving past it. Each alternative must be distinct in approach,
+not a variation on the same idea.
+
+Output schema — return a JSON object with EXACTLY these keys:
+  "blocker_summary":      one or two sentences describing the obstacle
+  "root_cause_analysis":  3-5 sentences identifying the root cause
+  "alternatives":         JSON array of EXACTLY 3 objects, each with:
+                            "path"              — short name of the alternative
+                            "solves"            — what this alternative resolves
+                            "tradeoff"          — what it costs or risks
+                            "first_step"        — concrete first step
+                            "aligned_standard"  — one of the Seven Standards
+  "recommended_path":     one sentence of the form "Path <name> because <reason>"
+  "canon_reference":      one to two sentences citing the canon
+"""
+
+
+def build_obstacle_system_prompt(canon_chunks: Sequence[dict]) -> str:
+    sections = [
+        _SHARED_VOICE,
+        _OBSTACLE_INSTRUCTIONS,
+        _format_seven_standards(),
+        _format_retrieved_chunks(canon_chunks),
+    ]
+    return "\n\n---\n\n".join(sections)
+
+
+def build_obstacle_user_message(*, task: dict, obstacle_description: str, obstacle_impact: str) -> str:
+    return (
+        _format_task_header(task)
+        + "\n\n"
+        + f"Obstacle description: {obstacle_description.strip()}\n"
+        + f"Obstacle impact: {obstacle_impact.strip() or '(not specified)'}\n"
+        + "\n"
+        + "Produce the obstacle-analysis JSON now."
+    )
+
+
+# ─── Recommendation extras: sub-task progress + active obstacles ────────
+
+
+def format_subtask_progress(subtasks: Sequence[dict]) -> str:
+    if not subtasks:
+        return "Sub-tasks: (none defined)"
+    total = len(subtasks)
+    completed = sum(1 for s in subtasks if s.get("status") == "completed")
+    in_progress = sum(1 for s in subtasks if s.get("status") == "in_progress")
+    header = f"Sub-tasks: {completed} of {total} completed ({in_progress} in progress)"
+    lines = [header]
+    for s in subtasks[:10]:
+        status = s.get("status", "pending")
+        title = (s.get("title") or "").strip()
+        ref = (s.get("canon_reference") or "").strip()
+        ref_part = f" [aligned: {ref}]" if ref else ""
+        lines.append(f"  - [{status}] {title}{ref_part}")
+    return "\n".join(lines)
+
+
+def format_active_obstacles(obstacles: Sequence[dict]) -> str:
+    if not obstacles:
+        return "Active obstacles: none"
+    lines = [f"Active obstacles ({len(obstacles)}):"]
+    for o in obstacles:
+        desc = (o.get("description") or "").strip()
+        impact = (o.get("impact") or "").strip()
+        proposals = o.get("proposed_solutions") or []
+        lines.append(f"  - {desc}")
+        if impact:
+            lines.append(f"      impact: {impact}")
+        if proposals:
+            lines.append(
+                f"      {len(proposals)} proposed solution(s) already generated — "
+                f"build on them rather than duplicate."
+            )
+    return "\n".join(lines)
 
 
 # ─── Helpers used by services to normalise timestamps for display ───────

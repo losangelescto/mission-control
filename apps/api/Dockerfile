@@ -31,7 +31,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         libpq5 \
-        curl && \
+        curl \
+        ffmpeg && \
     rm -rf /var/lib/apt/lists/* && \
     groupadd --system --gid 1001 appuser && \
     useradd --system --uid 1001 --gid appuser --home /app appuser
@@ -42,6 +43,9 @@ WORKDIR /app
 COPY --chown=appuser:appuser app/ ./app/
 COPY --chown=appuser:appuser alembic/ ./alembic/
 COPY --chown=appuser:appuser alembic.ini gunicorn.conf.py ./
+
+# Default upload directory; the appuser must be able to write here.
+RUN mkdir -p /app/data/uploads && chown -R appuser:appuser /app/data
 
 USER appuser
 

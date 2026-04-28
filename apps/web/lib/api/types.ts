@@ -47,6 +47,26 @@ export type TaskUpdate = {
   created_at: string;
 };
 
+export type SourceProcessingState =
+  | "queued"
+  | "processing"
+  | "partial"
+  | "complete"
+  | "failed";
+
+export type TranscriptionSegment = {
+  start_time: number;
+  end_time: number;
+  text: string;
+  speaker: string;
+};
+
+export type SourceProcessingMetadata = {
+  duration_seconds?: number;
+  confidence?: number;
+  segments?: TranscriptionSegment[];
+};
+
 export type SourceDocument = {
   id: number;
   filename: string;
@@ -56,7 +76,22 @@ export type SourceDocument = {
   is_active_canon_version: boolean;
   extracted_text: string;
   source_path: string;
+  processing_status: SourceProcessingState;
+  pages_processed: number;
+  pages_total: number;
+  processing_error: string | null;
+  processing_metadata: SourceProcessingMetadata | null;
   created_at: string;
+};
+
+export type SourceProcessingStatus = {
+  id: number;
+  processing_status: SourceProcessingState;
+  pages_processed: number;
+  pages_total: number;
+  processing_error: string | null;
+  duration_seconds: number | null;
+  transcription_segments_count: number | null;
 };
 
 export type TaskCandidate = {

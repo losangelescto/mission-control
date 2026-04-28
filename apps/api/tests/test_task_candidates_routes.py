@@ -1,12 +1,14 @@
 from collections.abc import Generator
 from io import BytesIO
 
+import pytest
 from fastapi.testclient import TestClient
 from reportlab.pdfgen import canvas
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app import db as db_module
 from app.config import get_settings
 from app.db import get_db
 from app.main import app
@@ -21,7 +23,7 @@ def _build_pdf_bytes(text: str) -> bytes:
     return buffer.getvalue()
 
 
-def test_task_candidate_extraction_approve_reject_flow(tmp_path) -> None:  # type: ignore[no-untyped-def]
+def test_task_candidate_extraction_approve_reject_flow(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -47,6 +49,7 @@ def test_task_candidate_extraction_approve_reject_flow(tmp_path) -> None:  # typ
             db.close()
 
     app.dependency_overrides[get_db] = override_get_db
+    monkeypatch.setattr(db_module, "SessionLocal", TestingSessionLocal)
     client = TestClient(app)
 
     upload = client.post(
@@ -117,7 +120,7 @@ def test_task_candidate_extraction_approve_reject_flow(tmp_path) -> None:  # typ
     app.dependency_overrides.clear()
 
 
-def test_task_candidate_extraction_with_pdf_fixture(tmp_path) -> None:  # type: ignore[no-untyped-def]
+def test_task_candidate_extraction_with_pdf_fixture(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -143,6 +146,7 @@ def test_task_candidate_extraction_with_pdf_fixture(tmp_path) -> None:  # type: 
             db.close()
 
     app.dependency_overrides[get_db] = override_get_db
+    monkeypatch.setattr(db_module, "SessionLocal", TestingSessionLocal)
     client = TestClient(app)
 
     pdf_bytes = _build_pdf_bytes("Action: owner: Taylor task complete monthly review every week")

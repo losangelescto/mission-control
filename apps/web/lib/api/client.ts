@@ -10,6 +10,7 @@ import {
   SubTask,
   SubTaskGeneratePreviewResponse,
   SourceDocument,
+  SourceProcessingStatus,
   StandardScore,
   Task,
   TaskCandidate,
@@ -102,6 +103,10 @@ export const apiClient = {
 
   async getSource(sourceId: number): Promise<SourceDocument> {
     return apiFetch<SourceDocument>(`/sources/${sourceId}`);
+  },
+
+  async getSourceStatus(sourceId: number): Promise<SourceProcessingStatus> {
+    return apiFetch<SourceProcessingStatus>(`/sources/${sourceId}/status`);
   },
 
   async getTaskCandidates(reviewStatus?: string): Promise<TaskCandidate[]> {

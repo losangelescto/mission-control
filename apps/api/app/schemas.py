@@ -171,14 +171,36 @@ class SourceDocumentResponse(BaseModel):
     extracted_text: str
     source_path: str
     processing_status: str = "complete"
+    pages_processed: int = 0
+    pages_total: int = 0
+    processing_error: str | None = None
+    processing_metadata: dict | None = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class SourceUploadResponse(BaseModel):
+    """Response from POST /sources/upload.
+
+    The upload endpoint enqueues the document for background processing
+    and returns immediately. ``chunk_count`` is 0 at this point; clients
+    poll GET /sources/{id}/status for progress.
+    """
     source_document: SourceDocumentResponse
-    chunk_count: int
+    chunk_count: int = 0
+
+
+class SourceStatusResponse(BaseModel):
+    id: int
+    processing_status: str
+    pages_processed: int
+    pages_total: int
+    processing_error: str | None = None
+    duration_seconds: float | None = None
+    transcription_segments_count: int | None = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CanonRegisterRequest(BaseModel):
@@ -245,7 +267,7 @@ class CallArtifactDetailResponse(BaseModel):
 
 class CallArtifactUploadResponse(BaseModel):
     call_artifact: CallArtifactResponse
-    chunk_count: int
+    chunk_count: int = 0
 
 
 class EmbeddingResponse(BaseModel):

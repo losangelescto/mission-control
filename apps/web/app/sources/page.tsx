@@ -2,16 +2,31 @@ import { apiClient } from "@/lib/api/client";
 import { parsePositiveIntParam } from "@/lib/search-params";
 import Link from "next/link";
 
+import SourceStatus from "./SourceStatus";
+import TranscriptView from "./TranscriptView";
+
 type SourcesPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-/**
- * Strip a leading 32-char hex hash + underscore from a filename.
- * e.g. "63e290c31c3744e28a6d0144a6a15dc9_D00_Ecosystem.docx" → "D00_Ecosystem.docx"
- */
+const AUDIO_VIDEO_EXTENSIONS = [
+  ".mp3",
+  ".wav",
+  ".m4a",
+  ".ogg",
+  ".flac",
+  ".mp4",
+  ".webm",
+  ".mov",
+];
+
 function displayName(filename: string): string {
   return filename.replace(/^[0-9a-f]{32}_/i, "");
+}
+
+function isMediaFile(filename: string): boolean {
+  const lower = filename.toLowerCase();
+  return AUDIO_VIDEO_EXTENSIONS.some((ext) => lower.endsWith(ext));
 }
 
 export default async function SourcesPage({ searchParams }: SourcesPageProps) {
@@ -29,6 +44,10 @@ export default async function SourcesPage({ searchParams }: SourcesPageProps) {
       : sources.length > 0
         ? sources[0]
         : null;
+
+  const selectedStatus = selectedSource
+    ? await apiClient.getSourceStatus(selectedSource.id).catch(() => null)
+    : null;
 
   return (
     <section className="stack">
@@ -48,7 +67,10 @@ export default async function SourcesPage({ searchParams }: SourcesPageProps) {
                 </div>
                 <div className="small">
                   {source.source_type}{" "}
-                  {activeSet.has(source.id) ? <span className="badge">active canon</span> : null}
+                  {activeSet.has(source.id) ? <span className="badge">active canon</span> : null}{" "}
+                  <span className="badge" style={statusBadgeStyle(source.processing_status)}>
+                    {source.processing_status}
+                  </span>
                 </div>
               </li>
             ))}
@@ -66,7 +88,7 @@ export default async function SourcesPage({ searchParams }: SourcesPageProps) {
               <div className="small">Canonical Doc ID: {selectedSource.canonical_doc_id ?? "-"}</div>
               <div className="small">Version: {selectedSource.version_label ?? "-"}</div>
               <div className="small">
-                Status:{" "}
+                Canon:{" "}
                 {selectedSource.is_active_canon_version ? (
                   <span className="badge">active canon</span>
                 ) : selectedSource.source_type === "canon_doc" ? (
@@ -75,6 +97,15 @@ export default async function SourcesPage({ searchParams }: SourcesPageProps) {
                   "-"
                 )}
               </div>
+              {selectedStatus ? (
+                <SourceStatus sourceId={selectedSource.id} initial={selectedStatus} />
+              ) : null}
+              {isMediaFile(selectedSource.filename) && selectedSource.processing_metadata ? (
+                <TranscriptView
+                  segments={selectedSource.processing_metadata.segments ?? []}
+                  durationSeconds={selectedSource.processing_metadata.duration_seconds}
+                />
+              ) : null}
               <details>
                 <summary>Extracted Text</summary>
                 <pre className="small mono">{selectedSource.extracted_text.slice(0, 3000)}</pre>
@@ -87,4 +118,19 @@ export default async function SourcesPage({ searchParams }: SourcesPageProps) {
       </div>
     </section>
   );
+}
+
+function statusBadgeStyle(state: string): { background: string; color: string } {
+  switch (state) {
+    case "queued":
+      return { background: "#e5e7eb", color: "#374151" };
+    case "processing":
+      return { background: "#dbeafe", color: "#1e40af" };
+    case "partial":
+      return { background: "#fef3c7", color: "#92400e" };
+    case "failed":
+      return { background: "#fee2e2", color: "#991b1b" };
+    default:
+      return { background: "#d1fae5", color: "#065f46" };
+  }
 }

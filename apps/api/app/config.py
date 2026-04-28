@@ -32,6 +32,23 @@ class Settings(BaseSettings):
     # Only honored if the task itself has not been modified since generation.
     recommendation_cache_seconds: int = 300
 
+    # --- Transcription provider ---
+    # `mock` (default, no network) or `whisper` (OpenAI Whisper API).
+    transcription_provider: str = "mock"
+    # API key for OpenAI Whisper. May be the same key as llm_api_key when both
+    # providers are OpenAI; left separate so each can be rotated independently.
+    whisper_api_key: str = ""
+    whisper_model: str = "whisper-1"
+    # Per-file safety cap. Files longer than this are rejected up front.
+    max_audio_duration_seconds: int = 7200
+
+    # --- Source processing ---
+    # Per-batch timeout for chunked PDF page extraction. If a batch exceeds
+    # this, the document is marked partial and processing moves on.
+    pdf_batch_timeout_seconds: int = 60
+    # Hard ceiling on the entire processing run for a single document.
+    processing_overall_timeout_seconds: int = 1800
+
     # --- Phase 1 POC feature flags (handoff for live integrations) ---
     use_fixture_mailbox: bool = Field(
         default=True,

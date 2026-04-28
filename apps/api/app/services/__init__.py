@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 
 from app.daily_rollup import build_daily_rollup_sections, format_daily_rollup_preview_text
 from app.call_action_extraction import extract_call_actions_heuristics
-from app.chunking import chunk_text
 from app.config import get_settings
 from app.mail_email_extraction import (
     extract_task_candidates_from_email_text,
@@ -46,7 +45,6 @@ from app.repositories import (
     create_delegation,
     create_recurrence_occurrence,
     create_recurrence_template as repo_create_recurrence_template,
-    create_source_chunk,
     create_source_document,
     create_task_candidate as repo_create_task_candidate,
     create_recommendation as repo_create_recommendation,
@@ -80,7 +78,6 @@ from app.repositories import (
     list_all_recurrence_occurrences,
     list_all_delegations,
 )
-from app.source_extraction import extract_text, extract_pdf_pages_batched
 from app.task_candidate_extraction import (
     AIExtractionInterface,
     NullAIExtractor,
@@ -373,11 +370,17 @@ def ingest_source_upload(
     canonical_doc_id: str | None,
     version_label: str | None,
     is_active_canon_version: bool,
-) -> tuple[SourceDocument, int]:
+) -> SourceDocument:
+    """Persist the uploaded file and create a queued SourceDocument.
+
+    The actual extraction, chunking, and (for media) transcription happens
+    in ``app.services.source_pipeline.process_source``, which the route
+    schedules as a FastAPI BackgroundTask after this function returns.
+    """
     logger.info(
-        "source ingestion started",
+        "source ingestion queued",
         extra={
-            "event": "source_ingestion_started",
+            "event": "source_ingestion_queued",
             "context": {"filename": filename, "source_type": source_type},
         },
     )
@@ -387,82 +390,14 @@ def ingest_source_upload(
 
     safe_name = f"{uuid4().hex}_{filename}"
     file_path = upload_dir / safe_name
+
+    from app.services.audio_utils import file_kind
+
+    if file_kind(file_path) == "unknown":
+        raise ValueError(f"unsupported file type: {file_path.suffix}")
+
     file_path.write_bytes(file_bytes)
 
-    is_pdf = file_path.suffix.lower() == ".pdf"
-
-    if is_pdf:
-        return _ingest_pdf_chunked(
-            db,
-            file_path=file_path,
-            filename=filename,
-            source_type=source_type,
-            canonical_doc_id=canonical_doc_id,
-            version_label=version_label,
-            is_active_canon_version=is_active_canon_version,
-        )
-
-    extracted_text = extract_text(file_path)
-    source_document = create_source_document(
-        db,
-        {
-            "filename": filename,
-            "source_type": source_type,
-            "canonical_doc_id": canonical_doc_id,
-            "version_label": version_label,
-            "is_active_canon_version": is_active_canon_version,
-            "extracted_text": extracted_text,
-            "source_path": str(file_path),
-            "processing_status": "complete",
-        },
-    )
-
-    chunks = chunk_text(extracted_text)
-    for idx, chunk in enumerate(chunks):
-        create_source_chunk(
-            db,
-            {
-                "source_document_id": source_document.id,
-                "chunk_index": idx,
-                "chunk_text": chunk,
-                "embedding": None,
-            },
-        )
-
-    db.commit()
-    db.refresh(source_document)
-    logger.info(
-        "source ingestion completed",
-        extra={
-            "event": "source_ingestion_completed",
-            "context": {
-                "source_id": source_document.id,
-                "filename": filename,
-                "source_type": source_type,
-                "chunk_count": len(chunks),
-            },
-        },
-    )
-    return source_document, len(chunks)
-
-
-def _ingest_pdf_chunked(
-    db: Session,
-    *,
-    file_path: Path,
-    filename: str,
-    source_type: str,
-    canonical_doc_id: str | None,
-    version_label: str | None,
-    is_active_canon_version: bool,
-) -> tuple[SourceDocument, int]:
-    """Process PDFs page-by-page in batches, committing incrementally.
-
-    Creates the source_document record immediately with processing_status='processing',
-    then extracts text in batches of pages. If extraction partially fails, successfully
-    extracted pages are preserved and status is set to 'partial'.
-    """
-    # Create the document record first so we have an ID for chunks.
     source_document = create_source_document(
         db,
         {
@@ -473,81 +408,12 @@ def _ingest_pdf_chunked(
             "is_active_canon_version": is_active_canon_version,
             "extracted_text": "",
             "source_path": str(file_path),
-            "processing_status": "processing",
+            "processing_status": "queued",
         },
     )
     db.commit()
     db.refresh(source_document)
-
-    all_text_parts: list[str] = []
-    chunk_count = 0
-    status = "complete"
-
-    try:
-        for batch_text in extract_pdf_pages_batched(file_path):
-            all_text_parts.append(batch_text)
-
-            # Chunk this batch and write to DB incrementally.
-            batch_chunks = chunk_text(batch_text)
-            for chunk in batch_chunks:
-                create_source_chunk(
-                    db,
-                    {
-                        "source_document_id": source_document.id,
-                        "chunk_index": chunk_count,
-                        "chunk_text": chunk,
-                        "embedding": None,
-                    },
-                )
-                chunk_count += 1
-
-            # Commit after each batch so progress is saved.
-            db.commit()
-            logger.info(
-                "PDF batch committed",
-                extra={
-                    "event": "pdf_batch_committed",
-                    "context": {
-                        "source_id": source_document.id,
-                        "chunks_so_far": chunk_count,
-                    },
-                },
-            )
-    except Exception:
-        logger.error(
-            "PDF extraction partially failed",
-            exc_info=True,
-            extra={
-                "event": "pdf_extraction_partial_failure",
-                "context": {
-                    "source_id": source_document.id,
-                    "chunks_extracted": chunk_count,
-                },
-            },
-        )
-        status = "partial" if chunk_count > 0 else "failed"
-
-    # Update the document with the full extracted text and final status.
-    full_text = "\n".join(all_text_parts).strip()
-    source_document.extracted_text = full_text
-    source_document.processing_status = status
-    db.add(source_document)
-    db.commit()
-    db.refresh(source_document)
-
-    logger.info(
-        "PDF source ingestion finished",
-        extra={
-            "event": "source_ingestion_completed",
-            "context": {
-                "source_id": source_document.id,
-                "filename": filename,
-                "processing_status": status,
-                "chunk_count": chunk_count,
-            },
-        },
-    )
-    return source_document, chunk_count
+    return source_document
 
 
 def list_source_documents(db: Session) -> list[SourceDocument]:
@@ -880,7 +746,7 @@ def ingest_call_artifact_upload(
             "context": {"artifact_type": artifact_type, "filename": filename},
         },
     )
-    source_document, chunk_count = ingest_source_upload(
+    source_document = ingest_source_upload(
         db,
         filename=filename,
         source_type=st,
@@ -900,17 +766,17 @@ def ingest_call_artifact_upload(
     db.commit()
     db.refresh(ca)
     logger.info(
-        "call artifact ingestion completed",
+        "call artifact ingestion queued",
         extra={
-            "event": "call_artifact_ingestion_completed",
+            "event": "call_artifact_ingestion_queued",
             "context": {
                 "call_artifact_id": ca.id,
                 "artifact_type": artifact_type,
-                "chunk_count": chunk_count,
+                "source_document_id": source_document.id,
             },
         },
     )
-    return ca, chunk_count
+    return ca, source_document.id
 
 
 def get_call_artifact(db: Session, call_artifact_id: int) -> CallArtifact | None:

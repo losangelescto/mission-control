@@ -1,16 +1,18 @@
 from collections.abc import Generator
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app import db as db_module
 from app.db import get_db
 from app.main import app
 from app.models import SourceChunk, SourceDocument
 
 
-def test_canon_register_activate_active_and_history() -> None:
+def test_canon_register_activate_active_and_history(monkeypatch: pytest.MonkeyPatch) -> None:
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -28,6 +30,7 @@ def test_canon_register_activate_active_and_history() -> None:
             db.close()
 
     app.dependency_overrides[get_db] = override_get_db
+    monkeypatch.setattr(db_module, "SessionLocal", TestingSessionLocal)
     client = TestClient(app)
 
     upload_v1 = client.post(
@@ -96,7 +99,7 @@ def test_canon_register_activate_active_and_history() -> None:
     app.dependency_overrides.clear()
 
 
-def test_canon_register_and_activate_validation_errors() -> None:
+def test_canon_register_and_activate_validation_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -114,6 +117,7 @@ def test_canon_register_and_activate_validation_errors() -> None:
             db.close()
 
     app.dependency_overrides[get_db] = override_get_db
+    monkeypatch.setattr(db_module, "SessionLocal", TestingSessionLocal)
     client = TestClient(app)
 
     non_canon_upload = client.post(

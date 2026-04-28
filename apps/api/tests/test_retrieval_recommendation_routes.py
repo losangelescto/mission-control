@@ -1,10 +1,12 @@
 from collections.abc import Generator
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app import db as db_module
 from app.config import get_settings
 from app.db import get_db
 from app.main import app
@@ -23,7 +25,7 @@ from app.models import (
 )
 
 
-def test_embed_retrieve_and_recommendation_routes(tmp_path) -> None:  # type: ignore[no-untyped-def]
+def test_embed_retrieve_and_recommendation_routes(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -53,6 +55,7 @@ def test_embed_retrieve_and_recommendation_routes(tmp_path) -> None:  # type: ig
             db.close()
 
     app.dependency_overrides[get_db] = override_get_db
+    monkeypatch.setattr(db_module, "SessionLocal", TestingSessionLocal)
     client = TestClient(app)
 
     canon_upload = client.post(

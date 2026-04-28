@@ -121,6 +121,12 @@ class SourceDocument(Base):
     processing_status: Mapped[str] = mapped_column(
         String(50), nullable=False, server_default="complete"
     )
+    pages_processed: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0"
+    )
+    pages_total: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    processing_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    processing_metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

@@ -7,6 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app import db as db_module
 from app.config import get_settings
 from app.db import get_db
 from app.deps import get_call_extraction_extractor
@@ -52,6 +53,7 @@ def _setup_client(tmp_path, monkeypatch) -> TestClient:  # type: ignore[no-untyp
             db.close()
 
     app.dependency_overrides[get_db] = override_get_db
+    monkeypatch.setattr(db_module, "SessionLocal", TestingSessionLocal)
     return TestClient(app)
 
 
@@ -68,7 +70,6 @@ def test_call_artifact_manual_notes_upload_list_detail_extract(
     )
     assert up.status_code == 201
     aid = up.json()["call_artifact"]["id"]
-    assert up.json()["chunk_count"] >= 1
 
     listed = client.get("/calls/artifacts")
     assert listed.status_code == 200

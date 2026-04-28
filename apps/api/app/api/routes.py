@@ -1,7 +1,18 @@
 import time
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+    status,
+)
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -26,6 +37,7 @@ from app.schemas import (
     RecurrenceTemplateResponse,
     ReadyResponse,
     SourceDocumentResponse,
+    SourceStatusResponse,
     SourceType,
     SourceUploadResponse,
     TaskBlockRequest,
@@ -304,6 +316,7 @@ def spawn_recurrence_template_route(
 
 @router.post("/sources/upload", response_model=SourceUploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_source_route(
+    background_tasks: BackgroundTasks,
     source_type: SourceType = Form(...),
     file: UploadFile = File(...),
     canonical_doc_id: str | None = Form(default=None),
@@ -313,7 +326,7 @@ async def upload_source_route(
 ) -> SourceUploadResponse:
     file_bytes = await file.read()
     try:
-        source_document, chunk_count = ingest_source_upload(
+        source_document = ingest_source_upload(
             db,
             filename=file.filename or "upload",
             source_type=source_type,
@@ -325,9 +338,34 @@ async def upload_source_route(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
+    from app.services.source_pipeline import queue_source_processing
+
+    background_tasks.add_task(queue_source_processing, source_document.id)
+
     return SourceUploadResponse(
         source_document=SourceDocumentResponse.model_validate(source_document),
-        chunk_count=chunk_count,
+    )
+
+
+@router.get("/sources/{source_id}/status", response_model=SourceStatusResponse)
+def get_source_status_route(source_id: int, db: Session = Depends(get_db)) -> SourceStatusResponse:
+    source_document = get_source_document(db, source_id)
+    if source_document is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="source not found")
+
+    metadata = source_document.processing_metadata or {}
+    duration = metadata.get("duration_seconds") if isinstance(metadata, dict) else None
+    segments = metadata.get("segments") if isinstance(metadata, dict) else None
+    segment_count = len(segments) if isinstance(segments, list) else None
+
+    return SourceStatusResponse(
+        id=source_document.id,
+        processing_status=source_document.processing_status,
+        pages_processed=source_document.pages_processed,
+        pages_total=source_document.pages_total,
+        processing_error=source_document.processing_error,
+        duration_seconds=float(duration) if duration is not None else None,
+        transcription_segments_count=segment_count,
     )
 
 
@@ -732,6 +770,7 @@ def refresh_mail_thread_task_state_route(
 
 @router.post("/calls/upload-artifact", response_model=CallArtifactUploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_call_artifact_route(
+    background_tasks: BackgroundTasks,
     artifact_type: CallArtifactType = Form(...),
     file: UploadFile = File(...),
     title: str | None = Form(default=None),
@@ -744,7 +783,7 @@ async def upload_call_artifact_route(
         )
     file_bytes = await file.read()
     try:
-        ca, chunk_count = ingest_call_artifact_upload(
+        ca, source_id = ingest_call_artifact_upload(
             db,
             artifact_type=artifact_type,
             filename=file.filename or "artifact.txt",
@@ -753,9 +792,13 @@ async def upload_call_artifact_route(
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    from app.services.source_pipeline import queue_source_processing
+
+    background_tasks.add_task(queue_source_processing, source_id)
+
     return CallArtifactUploadResponse(
         call_artifact=CallArtifactResponse.model_validate(ca),
-        chunk_count=chunk_count,
     )
 
 

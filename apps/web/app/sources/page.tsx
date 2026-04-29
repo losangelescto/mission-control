@@ -53,6 +53,16 @@ export default async function SourcesPage({ searchParams }: SourcesPageProps) {
     <section className="stack">
       <div className="panel">
         <h1>Sources</h1>
+        <form action="/search" method="get" className="stack-sm" style={{ marginTop: "0.5rem" }}>
+          <input
+            type="search"
+            name="q"
+            placeholder="Search sources by filename or text…"
+            aria-label="Search within sources"
+            style={{ width: "100%", padding: "0.4rem 0.6rem" }}
+          />
+          <input type="hidden" name="type" value="sources" />
+        </form>
       </div>
       <div className="grid cols-2">
         <article className="panel">

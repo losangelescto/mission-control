@@ -114,6 +114,16 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
     <section className="stack">
       <div className="panel">
         <h1>Tasks</h1>
+        <form action="/search" method="get" className="stack-sm" style={{ marginTop: "0.5rem" }}>
+          <input
+            type="search"
+            name="q"
+            placeholder="Search tasks, updates, sub-tasks, obstacles…"
+            aria-label="Search within tasks"
+            style={{ width: "100%", padding: "0.4rem 0.6rem" }}
+          />
+          <input type="hidden" name="type" value="tasks" />
+        </form>
       </div>
 
       {tasksError ? (

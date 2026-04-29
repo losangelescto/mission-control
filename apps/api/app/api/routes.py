@@ -93,6 +93,8 @@ from app.schemas import (
     ObstacleResolveRequest,
     ObstacleResponse,
     ObstacleUpdate,
+    SearchResponse,
+    SearchResult,
 )
 from app.task_candidate_extraction import AIExtractionInterface
 from app.repositories import (
@@ -1106,3 +1108,37 @@ def resolve_obstacle_route(
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="obstacle not found")
     return ObstacleResponse.model_validate(row)
+
+
+@router.get("/search", response_model=SearchResponse)
+def search_route(
+    q: str = Query(..., min_length=1, max_length=200, description="search query"),
+    type: str = Query(default="all", description="all|tasks|sources|reviews|canon"),
+    mode: str = Query(default="keyword", description="keyword|semantic"),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+) -> SearchResponse:
+    from app.services.search import search as run_search
+
+    type_filter = type if type in ("all", "tasks", "sources", "reviews", "canon") else "all"
+    mode_value = mode if mode in ("keyword", "semantic") else "keyword"
+
+    payload = run_search(
+        db,
+        query=q,
+        type_filter=type_filter,
+        limit=limit,
+        offset=offset,
+        mode=mode_value,
+    )
+    return SearchResponse(
+        query=q,
+        mode=payload["mode"],
+        type_filter=type_filter,
+        results=[SearchResult(**r) for r in payload["results"]],
+        total=payload["total"],
+        type_counts=payload["type_counts"],
+        limit=limit,
+        offset=offset,
+    )

@@ -3,6 +3,7 @@ import Link from "next/link";
 import Script from "next/script";
 import { JetBrains_Mono } from "next/font/google";
 import { NavMenu } from "./components/NavMenu";
+import SearchBar from "./components/SearchBar";
 import { ThemeToggle } from "./components/ThemeToggle";
 import "./globals.css";
 
@@ -45,6 +46,7 @@ export default function RootLayout({
               MISSION CONTROL
             </Link>
             <NavMenu />
+            <SearchBar />
             <ThemeToggle />
           </div>
         </header>

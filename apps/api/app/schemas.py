@@ -657,3 +657,30 @@ class ObstacleResponse(BaseModel):
     identified_by: str
 
     model_config = ConfigDict(from_attributes=True)
+
+
+SearchResultType = Literal[
+    "task", "task_update", "sub_task", "obstacle",
+    "source", "source_chunk", "review", "canon",
+]
+
+
+class SearchResult(BaseModel):
+    id: int
+    type: SearchResultType
+    title: str
+    snippet: str
+    relevance: float
+    url: str
+    metadata: dict
+
+
+class SearchResponse(BaseModel):
+    query: str
+    mode: Literal["keyword", "semantic"]
+    type_filter: str
+    results: list[SearchResult]
+    total: int
+    type_counts: dict[str, int]
+    limit: int
+    offset: int

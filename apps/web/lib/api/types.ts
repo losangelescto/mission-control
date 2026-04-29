@@ -318,3 +318,37 @@ export type RecommendationHistoryItem = {
   standard: string;
   next_action: string;
 };
+
+export type SearchResultType =
+  | "task"
+  | "task_update"
+  | "sub_task"
+  | "obstacle"
+  | "source"
+  | "source_chunk"
+  | "review"
+  | "canon";
+
+export type SearchResult = {
+  id: number;
+  type: SearchResultType;
+  title: string;
+  snippet: string;
+  relevance: number;
+  url: string;
+  metadata: Record<string, unknown>;
+};
+
+export type SearchTypeFilter = "all" | "tasks" | "sources" | "reviews" | "canon";
+export type SearchMode = "keyword" | "semantic";
+
+export type SearchResponse = {
+  query: string;
+  mode: SearchMode;
+  type_filter: SearchTypeFilter | string;
+  results: SearchResult[];
+  total: number;
+  type_counts: Record<string, number>;
+  limit: number;
+  offset: number;
+};

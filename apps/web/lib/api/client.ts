@@ -10,6 +10,9 @@ import {
   Recommendation,
   RecommendationHistoryItem,
   ReviewSession,
+  SearchMode,
+  SearchResponse,
+  SearchTypeFilter,
   SubTask,
   SubTaskGeneratePreviewResponse,
   SourceDocument,
@@ -249,5 +252,32 @@ export const apiClient = {
       method: "POST",
       body: JSON.stringify({ resolution_notes: resolutionNotes }),
     });
+  },
+
+  async search(
+    q: string,
+    options: {
+      type?: SearchTypeFilter;
+      mode?: SearchMode;
+      limit?: number;
+      offset?: number;
+      signal?: AbortSignal;
+    } = {},
+  ): Promise<SearchResponse> {
+    const params = new URLSearchParams({ q });
+    if (options.type) params.set("type", options.type);
+    if (options.mode) params.set("mode", options.mode);
+    if (options.limit !== undefined) params.set("limit", String(options.limit));
+    if (options.offset !== undefined) params.set("offset", String(options.offset));
+    const response = await fetch(`${API_BASE_URL}/search?${params.toString()}`, {
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      signal: options.signal,
+    });
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(`Search failed (${response.status}): ${detail}`);
+    }
+    return (await response.json()) as SearchResponse;
   },
 };

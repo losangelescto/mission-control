@@ -89,6 +89,7 @@ def process_source(db: Session, source_id: int) -> SourceDocument | None:
         _mark_failed(db, source, f"unhandled error: {exc}")
 
     db.refresh(source)
+    _maybe_auto_extract(db, source)
     return source
 
 
@@ -288,6 +289,34 @@ def _process_text(db: Session, source: SourceDocument, path: Path) -> None:
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────
+
+
+def _maybe_auto_extract(db: Session, source: SourceDocument) -> None:
+    """Run task extraction after a successful ingest unless disabled.
+
+    Canon documents are skipped — they describe standards, not action
+    items. Sources that finished as ``failed`` are also skipped because
+    there is nothing useful to extract from.
+    """
+    settings = get_settings()
+    if not settings.auto_extract_tasks:
+        return
+    if source.processing_status not in ("complete", "partial"):
+        return
+    if source.source_type == "canon_doc":
+        return
+    if not (source.extracted_text or "").strip():
+        return
+
+    try:
+        from app.services.task_extraction import extract_task_candidates_from_source
+
+        extract_task_candidates_from_source(db, source.id)
+    except Exception:
+        logger.exception(
+            "auto-extraction failed",
+            extra={"context": {"source_id": source.id}},
+        )
 
 
 def _mark_failed(db: Session, source: SourceDocument, reason: str) -> None:

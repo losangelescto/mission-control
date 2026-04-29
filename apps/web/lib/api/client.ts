@@ -1,5 +1,8 @@
 import {
   CadenceStatus,
+  CanonChangeEventDetail,
+  CanonChangeEventSummary,
+  CanonChangeListResponse,
   DailyReview,
   MetricsByOwner,
   MetricsSummary,
@@ -118,6 +121,22 @@ export const apiClient = {
 
   async getActiveCanon(): Promise<SourceDocument[]> {
     return apiFetch<SourceDocument[]>("/canon/active");
+  },
+
+  async getCanonChanges(onlyUnreviewed = false): Promise<CanonChangeListResponse> {
+    const query = onlyUnreviewed ? "?only_unreviewed=true" : "";
+    return apiFetch<CanonChangeListResponse>(`/canon/changes${query}`);
+  },
+
+  async getCanonChange(eventId: number): Promise<CanonChangeEventDetail> {
+    return apiFetch<CanonChangeEventDetail>(`/canon/changes/${eventId}`);
+  },
+
+  async acknowledgeCanonChange(eventId: number): Promise<CanonChangeEventSummary> {
+    return apiFetch<CanonChangeEventSummary>(
+      `/canon/changes/${eventId}/acknowledge`,
+      { method: "POST", body: "{}" },
+    );
   },
 
   async getMetricsSummary(): Promise<MetricsSummary> {

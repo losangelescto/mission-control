@@ -28,6 +28,9 @@ from app.mailbox.service import (
 from app.mailbox.types import MailboxMessageDTO
 from app.mailbox.repository import list_messages
 from app.schemas import (
+    CanonChangeEventDetail,
+    CanonChangeEventSummary,
+    CanonChangeListResponse,
     CanonHistoryResponse,
     CanonRegisterRequest,
     HealthResponse,
@@ -425,6 +428,67 @@ def canon_history_route(canonical_doc_id: str, db: Session = Depends(get_db)) ->
         canonical_doc_id=canonical_doc_id,
         versions=[SourceDocumentResponse.model_validate(v) for v in versions],
     )
+
+
+@router.get("/canon/changes", response_model=CanonChangeListResponse)
+def list_canon_changes_route(
+    only_unreviewed: bool = Query(default=False),
+    db: Session = Depends(get_db),
+) -> CanonChangeListResponse:
+    from app.services import (
+        count_unreviewed_canon_change_events,
+        list_canon_change_events_service,
+    )
+
+    events = list_canon_change_events_service(db, only_unreviewed=only_unreviewed)
+    return CanonChangeListResponse(
+        events=[CanonChangeEventSummary.model_validate(e) for e in events],
+        unreviewed_count=count_unreviewed_canon_change_events(db),
+    )
+
+
+@router.get("/canon/changes/{event_id}", response_model=CanonChangeEventDetail)
+def get_canon_change_route(
+    event_id: int, db: Session = Depends(get_db)
+) -> CanonChangeEventDetail:
+    from app.services import get_canon_change_event_service, get_task
+
+    event = get_canon_change_event_service(db, event_id)
+    if event is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="canon change not found")
+
+    affected_tasks: list[TaskResponse] = []
+    for tid in event.affected_task_ids or []:
+        task = get_task(db, int(tid))
+        if task is not None:
+            affected_tasks.append(TaskResponse.model_validate(task))
+
+    new_source = get_source_document(db, event.new_source_id)
+    previous_source = (
+        get_source_document(db, event.previous_source_id)
+        if event.previous_source_id
+        else None
+    )
+
+    summary = CanonChangeEventSummary.model_validate(event).model_dump()
+    return CanonChangeEventDetail(
+        **summary,
+        affected_tasks=affected_tasks,
+        new_source_filename=new_source.filename if new_source else None,
+        previous_source_filename=previous_source.filename if previous_source else None,
+    )
+
+
+@router.post("/canon/changes/{event_id}/acknowledge", response_model=CanonChangeEventSummary)
+def acknowledge_canon_change_route(
+    event_id: int, db: Session = Depends(get_db)
+) -> CanonChangeEventSummary:
+    from app.services import acknowledge_canon_change_event
+
+    event = acknowledge_canon_change_event(db, event_id)
+    if event is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="canon change not found")
+    return CanonChangeEventSummary.model_validate(event)
 
 
 @router.post("/sources/{source_id}/extract-task-candidates", response_model=list[TaskCandidateResponse])

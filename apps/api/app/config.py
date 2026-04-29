@@ -49,6 +49,17 @@ class Settings(BaseSettings):
     # Hard ceiling on the entire processing run for a single document.
     processing_overall_timeout_seconds: int = 1800
 
+    # --- Task extraction ---
+    # When true, source ingestion automatically runs candidate extraction
+    # after text is in place. Canon documents are skipped regardless.
+    auto_extract_tasks: bool = True
+    # Candidates with confidence below this threshold are still saved but
+    # tagged so the UI can hide them unless the operator opts in.
+    extraction_confidence_threshold: float = 0.6
+    # For long transcripts, split into windows of this many minutes and
+    # extract per window. Set to 0 to disable windowing.
+    extraction_window_minutes: int = 10
+
     # --- Phase 1 POC feature flags (handoff for live integrations) ---
     use_fixture_mailbox: bool = Field(
         default=True,

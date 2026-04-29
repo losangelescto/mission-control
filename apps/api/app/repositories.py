@@ -8,6 +8,7 @@ from app.models import (
     AuditEvent,
     Blocker,
     CallArtifact,
+    CanonChangeEvent,
     DailyRollup,
     Delegation,
     Obstacle,
@@ -207,6 +208,68 @@ def deactivate_canon_versions(db: Session, canonical_doc_id: str) -> None:
     for doc in existing:
         doc.is_active_canon_version = False
         db.add(doc)
+
+
+def get_active_canon_for_doc_id(db: Session, canonical_doc_id: str) -> SourceDocument | None:
+    """Return the currently-active source for a canonical_doc_id, if any."""
+    stmt = (
+        select(SourceDocument)
+        .where(SourceDocument.source_type == "canon_doc")
+        .where(SourceDocument.canonical_doc_id == canonical_doc_id)
+        .where(SourceDocument.is_active_canon_version.is_(True))
+        .order_by(SourceDocument.id.desc())
+    )
+    return db.scalars(stmt).first()
+
+
+def create_canon_change_event(db: Session, payload: dict) -> CanonChangeEvent:
+    event = CanonChangeEvent(**payload)
+    db.add(event)
+    db.flush()
+    return event
+
+
+def list_canon_change_events(
+    db: Session, *, only_unreviewed: bool = False
+) -> list[CanonChangeEvent]:
+    stmt = select(CanonChangeEvent)
+    if only_unreviewed:
+        stmt = stmt.where(CanonChangeEvent.reviewed.is_(False))
+    stmt = stmt.order_by(CanonChangeEvent.created_at.desc(), CanonChangeEvent.id.desc())
+    return list(db.scalars(stmt).all())
+
+
+def get_canon_change_event_by_id(db: Session, event_id: int) -> CanonChangeEvent | None:
+    return db.get(CanonChangeEvent, event_id)
+
+
+def count_unreviewed_canon_changes(db: Session) -> int:
+    stmt = select(CanonChangeEvent).where(CanonChangeEvent.reviewed.is_(False))
+    return len(list(db.scalars(stmt).all()))
+
+
+def list_active_tasks(db: Session) -> list[Task]:
+    """Tasks that are not yet completed — used to compute canon impact."""
+    stmt = select(Task).where(Task.status != "completed").order_by(Task.id.asc())
+    return list(db.scalars(stmt).all())
+
+
+def mark_tasks_canon_update_pending(db: Session, task_ids: list[int]) -> None:
+    if not task_ids:
+        return
+    stmt = select(Task).where(Task.id.in_(task_ids))
+    for task in db.scalars(stmt).all():
+        task.canon_update_pending = True
+        db.add(task)
+
+
+def clear_task_canon_update_pending(db: Session, task_ids: list[int]) -> None:
+    if not task_ids:
+        return
+    stmt = select(Task).where(Task.id.in_(task_ids))
+    for task in db.scalars(stmt).all():
+        task.canon_update_pending = False
+        db.add(task)
 
 
 def create_task_candidate(db: Session, payload: dict) -> TaskCandidate:

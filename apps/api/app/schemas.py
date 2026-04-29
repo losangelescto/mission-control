@@ -77,6 +77,7 @@ class TaskResponse(BaseModel):
     assigner_name: str
     due_at: datetime | None = None
     source_confidence: float | None = None
+    canon_update_pending: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -229,9 +230,38 @@ class TaskCandidateResponse(BaseModel):
     mailbox_thread_id: int | None = None
     related_task_id: int | None = None
     call_artifact_id: int | None = None
+    suggested_priority: str | None = None
+    source_reference: str | None = None
+    source_timestamp: str | None = None
+    canon_alignment: str | None = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class CanonChangeEventSummary(BaseModel):
+    id: int
+    canon_doc_id: str
+    previous_source_id: int | None = None
+    new_source_id: int
+    change_summary: str
+    affected_task_ids: list[int]
+    impact_analysis: str
+    reviewed: bool
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CanonChangeEventDetail(CanonChangeEventSummary):
+    affected_tasks: list[TaskResponse] = []
+    new_source_filename: str | None = None
+    previous_source_filename: str | None = None
+
+
+class CanonChangeListResponse(BaseModel):
+    events: list[CanonChangeEventSummary]
+    unreviewed_count: int
 
 
 class TaskCandidateRejectRequest(BaseModel):

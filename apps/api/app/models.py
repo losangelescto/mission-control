@@ -22,6 +22,9 @@ class Task(Base):
     assigner_name: Mapped[str] = mapped_column(String(255), nullable=False)
     due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     source_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    canon_update_pending: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -190,6 +193,39 @@ class TaskCandidate(Base):
     related_task_id: Mapped[int | None] = mapped_column(ForeignKey("tasks.id"), nullable=True, index=True)
     call_artifact_id: Mapped[int | None] = mapped_column(
         ForeignKey("call_artifacts.id"), nullable=True, index=True
+    )
+    suggested_priority: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    source_reference: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_timestamp: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    canon_alignment: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class CanonChangeEvent(Base):
+    """A diff between two versions of the same canon document.
+
+    Created when a new canon version is activated. ``affected_task_ids`` is
+    the list of currently-active tasks whose work touches the changed canon;
+    those tasks also have ``canon_update_pending=True`` until acknowledged.
+    """
+
+    __tablename__ = "canon_change_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    canon_doc_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    previous_source_id: Mapped[int | None] = mapped_column(
+        ForeignKey("source_documents.id"), nullable=True
+    )
+    new_source_id: Mapped[int] = mapped_column(
+        ForeignKey("source_documents.id"), nullable=False
+    )
+    change_summary: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    affected_task_ids: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    impact_analysis: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    reviewed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

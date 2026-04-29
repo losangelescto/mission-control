@@ -30,6 +30,7 @@ export type Task = {
   assigner_name: string;
   due_at: string | null;
   source_confidence: number | null;
+  canon_update_pending: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -104,7 +105,36 @@ export type TaskCandidate = {
   fallback_due_at: string | null;
   review_status: string;
   confidence: number | null;
+  hints_json?: Record<string, unknown>;
+  candidate_kind?: string;
+  suggested_priority: string | null;
+  source_reference: string | null;
+  source_timestamp: string | null;
+  canon_alignment: string | null;
   created_at: string;
+};
+
+export type CanonChangeEventSummary = {
+  id: number;
+  canon_doc_id: string;
+  previous_source_id: number | null;
+  new_source_id: number;
+  change_summary: string;
+  affected_task_ids: number[];
+  impact_analysis: string;
+  reviewed: boolean;
+  created_at: string;
+};
+
+export type CanonChangeEventDetail = CanonChangeEventSummary & {
+  affected_tasks: Task[];
+  new_source_filename: string | null;
+  previous_source_filename: string | null;
+};
+
+export type CanonChangeListResponse = {
+  events: CanonChangeEventSummary[];
+  unreviewed_count: number;
 };
 
 export type DailyReviewItem = {

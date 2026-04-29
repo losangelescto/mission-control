@@ -4,12 +4,15 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
+import CanonChangesBadge from './CanonChangesBadge'
+
 const NAV_LINKS = [
-  { href: '/dashboard', label: 'Dashboard' },
-  { href: '/tasks',     label: 'Tasks'     },
-  { href: '/sources',   label: 'Sources'   },
-  { href: '/review',    label: 'Review'    },
-  { href: '/metrics',   label: 'Metrics'   },
+  { href: '/dashboard',     label: 'Dashboard'     },
+  { href: '/tasks',         label: 'Tasks'         },
+  { href: '/sources',       label: 'Sources'       },
+  { href: '/canon-changes', label: 'Canon Changes' },
+  { href: '/review',        label: 'Review'        },
+  { href: '/metrics',       label: 'Metrics'       },
 ]
 
 function MenuIcon() {
@@ -68,6 +71,7 @@ export function NavMenu() {
             className={`nav-link${pathname === href ? ' nav-link-active' : ''}`}
           >
             {label}
+            {href === '/canon-changes' ? <CanonChangesBadge /> : null}
           </Link>
         ))}
       </nav>

@@ -354,35 +354,122 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
         </article>
       ) : null}
 
-      <article className="panel">
-        <h2>Suggested Tasks — Extracted from Sources</h2>
-        <p className="small" style={{ marginBottom: "0.5rem" }}>
-          Action items identified from uploaded documents. Review and add to your task list, or dismiss.
-        </p>
-        <ul className="list">
-          {candidates.length === 0 ? (
-            <li className="small">No suggested tasks found.</li>
-          ) : (
-            candidates.map((candidate) => (
-              <li key={candidate.id}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.75rem" }}>
-                  <div style={{ minWidth: 0 }}>
-                    <strong>{candidate.title.length > 120 ? candidate.title.slice(0, 120) + "…" : candidate.title}</strong>
-                    <div className="small" style={{ marginTop: "0.25rem" }}>
-                      Source #{candidate.source_document_id}
-                      {candidate.inferred_owner_name ? ` · Owner: ${candidate.inferred_owner_name}` : ""}
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", gap: "0.375rem", flexShrink: 0 }}>
-                    <ApproveCandidate candidateId={candidate.id} />
-                    <DismissCandidate candidateId={candidate.id} />
-                  </div>
-                </div>
-              </li>
-            ))
-          )}
-        </ul>
-      </article>
+      {(() => {
+        const showAll = firstSearchParam(params.show_all_candidates) === "1";
+        const CONFIDENCE_THRESHOLD = 0.6;
+        const visibleCandidates = showAll
+          ? candidates
+          : candidates.filter((c) => (c.confidence ?? 0) >= CONFIDENCE_THRESHOLD);
+        const hiddenCount = candidates.length - visibleCandidates.length;
+
+        const toggleParams = new URLSearchParams();
+        if (filters.status) toggleParams.set("status", filters.status);
+        if (filters.owner_name) toggleParams.set("owner_name", filters.owner_name);
+        if (filters.priority) toggleParams.set("priority", filters.priority);
+        if (filters.due_before) toggleParams.set("due_before", filters.due_before);
+        if (!showAll) toggleParams.set("show_all_candidates", "1");
+        const toggleQuery = toggleParams.toString();
+        const toggleHref = toggleQuery ? `/tasks?${toggleQuery}` : "/tasks";
+
+        return (
+          <article className="panel">
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                gap: "0.75rem",
+                marginBottom: "0.5rem",
+              }}
+            >
+              <div>
+                <h2>Suggested Tasks — Extracted from Sources</h2>
+                <p className="small">
+                  Action items identified from uploaded documents. Review and add to
+                  your task list, or dismiss.
+                </p>
+              </div>
+              <Link href={toggleHref} className="small">
+                {showAll
+                  ? "Hide low-confidence"
+                  : hiddenCount > 0
+                    ? `Show all (${hiddenCount} low-confidence hidden)`
+                    : "Show all"}
+              </Link>
+            </div>
+            <ul className="list">
+              {visibleCandidates.length === 0 ? (
+                <li className="small">
+                  {candidates.length === 0
+                    ? "No suggested tasks found."
+                    : "No high-confidence candidates — toggle Show all to see possibilities."}
+                </li>
+              ) : (
+                visibleCandidates.map((candidate) => {
+                  const confidence = candidate.confidence ?? 0;
+                  const isLow = confidence < CONFIDENCE_THRESHOLD;
+                  const kind =
+                    typeof candidate.hints_json?.extraction_kind === "string"
+                      ? (candidate.hints_json.extraction_kind as string)
+                      : null;
+                  return (
+                    <li key={candidate.id} style={isLow ? { opacity: 0.6 } : undefined}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "flex-start",
+                          gap: "0.75rem",
+                        }}
+                      >
+                        <div style={{ minWidth: 0 }}>
+                          <strong>
+                            {candidate.title.length > 120
+                              ? candidate.title.slice(0, 120) + "…"
+                              : candidate.title}
+                          </strong>
+                          {isLow ? (
+                            <span className="badge" style={{ marginLeft: "0.5rem" }}>
+                              Possible task
+                            </span>
+                          ) : null}
+                          {kind && kind !== "action_item" ? (
+                            <span className="badge" style={{ marginLeft: "0.5rem" }}>
+                              {kind}
+                            </span>
+                          ) : null}
+                          <div className="small" style={{ marginTop: "0.25rem" }}>
+                            Source #{candidate.source_document_id}
+                            {candidate.inferred_owner_name
+                              ? ` · Owner: ${candidate.inferred_owner_name}`
+                              : ""}
+                            {candidate.suggested_priority
+                              ? ` · Priority: ${candidate.suggested_priority}`
+                              : ""}
+                            {candidate.canon_alignment
+                              ? ` · Standard: ${candidate.canon_alignment}`
+                              : ""}
+                            {candidate.source_timestamp
+                              ? ` · ${candidate.source_timestamp}`
+                              : ""}
+                            {confidence > 0
+                              ? ` · ${(confidence * 100).toFixed(0)}% confidence`
+                              : ""}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", gap: "0.375rem", flexShrink: 0 }}>
+                          <ApproveCandidate candidateId={candidate.id} />
+                          <DismissCandidate candidateId={candidate.id} />
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })
+              )}
+            </ul>
+          </article>
+        );
+      })()}
     </section>
   );
 }

@@ -339,6 +339,176 @@ Output schema — return a JSON object with EXACTLY these keys:
 """
 
 
+_EXTRACTION_INSTRUCTIONS = """TASK-EXTRACTION MODE INSTRUCTIONS:
+
+You are turning raw operational source material (emails, transcripts, call \
+artifacts, board exports) into discrete actionable candidates. Be honest about \
+confidence: most lines in a real source are discussion, not action items.
+
+Distinguish three kinds of candidate, and set ``confidence`` accordingly:
+- ``action_item``  — someone explicitly committed to doing something. \
+Confidence >= 0.75.
+- ``decision``     — a choice was made on the call but no one was named to \
+execute. Confidence around 0.55-0.7.
+- ``discussion``   — a topic was raised but no commitment or decision. \
+Confidence <= 0.5.
+
+Other rules:
+- ``suggested_owner`` should use the speaker label or named person from the \
+text when one is identifiable; otherwise null.
+- ``suggested_priority`` is one of "low", "medium", "high" — read urgency \
+language from the text, not assumptions.
+- ``suggested_due_date`` is an ISO-8601 date string when a real date is \
+mentioned; null otherwise. Do NOT invent due dates.
+- ``source_reference`` is a short anchor (3-8 words) so the operator can find \
+the moment in the recording or document.
+- ``source_timestamp`` is "MM:SS → MM:SS" for transcripts when segment \
+boundaries are available; null for non-transcript sources.
+- ``canon_alignment`` is the single most relevant Standard from the seven \
+listed below.
+
+Output schema — return a JSON object with EXACTLY one key:
+  "candidates": JSON array (may be empty), each entry an object with:
+    "title"               — <= 100 characters, one specific action or topic
+    "description"         — 1-3 sentences with the gist + any commitment
+    "suggested_owner"     — string or null
+    "suggested_priority"  — "low" | "medium" | "high"
+    "suggested_due_date"  — ISO date string ("YYYY-MM-DD") or null
+    "source_reference"    — short anchor phrase
+    "source_timestamp"    — "MM:SS → MM:SS" or null
+    "confidence"          — float in [0.0, 1.0]
+    "canon_alignment"     — one of the Seven Standards by name
+    "extraction_kind"     — "action_item" | "decision" | "discussion"
+"""
+
+
+_CANON_CHANGE_INSTRUCTIONS = """CANON-CHANGE ANALYSIS MODE INSTRUCTIONS:
+
+A new version of a canon document has been activated. Your job is to read the \
+diff and the list of currently-active tasks, then explain — concretely — what \
+operators should re-check.
+
+Be specific. Do NOT say "review your tasks". Name the actual change in the \
+canon, then name which kinds of in-flight work are most likely to be \
+out-of-date because of it.
+
+Output schema — return a JSON object with EXACTLY these keys:
+  "change_summary":        2-4 sentences describing what materially changed
+  "impact_analysis":       3-6 sentences describing how the change affects \
+in-flight work, naming task patterns where possible
+  "affected_task_titles":  JSON array of task titles (subset of the list \
+provided) that are most likely affected; may be empty
+"""
+
+
+def build_extraction_system_prompt(
+    *,
+    source_kind: str,
+    has_speakers: bool,
+    has_timestamps: bool,
+    canon_chunks: Sequence[dict] | None = None,
+) -> str:
+    """Prompt for extracting task candidates from a single source segment.
+
+    ``source_kind`` is a free-form descriptor like "email thread", "call
+    transcript", "board export"; it is woven into the preamble so the LLM
+    knows what shape of input to expect.
+    """
+    intro_lines: list[str] = [f"You are processing a {source_kind}."]
+    if has_speakers:
+        intro_lines.append(
+            "The text includes speaker labels in `[Speaker N]` form — use "
+            "them to infer ownership when someone explicitly commits."
+        )
+    if has_timestamps:
+        intro_lines.append(
+            "Segment timestamps are available; use them when populating "
+            "`source_timestamp`."
+        )
+    intro = " ".join(intro_lines)
+
+    sections = [
+        _SHARED_VOICE,
+        intro,
+        _EXTRACTION_INSTRUCTIONS,
+        _format_seven_standards(),
+    ]
+    if canon_chunks:
+        sections.append(_format_retrieved_chunks(canon_chunks))
+    return "\n\n---\n\n".join(s for s in sections if s)
+
+
+def build_extraction_user_message(
+    *,
+    source_filename: str,
+    source_text: str,
+    window_label: str | None = None,
+) -> str:
+    header = f"Source: {source_filename}"
+    if window_label:
+        header += f" — segment {window_label}"
+    body = source_text.strip() or "(empty source)"
+    return f"{header}\n\n{body}\n\nProduce the candidates JSON now."
+
+
+def build_dedup_system_prompt() -> str:
+    return "\n\n---\n\n".join(
+        [
+            _SHARED_VOICE,
+            (
+                "DEDUPLICATION MODE INSTRUCTIONS:\n\n"
+                "Given multiple candidate-task lists drawn from different segments "
+                "of the same recording, merge duplicates: same action item, same "
+                "owner, same intent. Prefer the most complete description and the "
+                "earliest source_timestamp. Keep the highest confidence value of "
+                "the duplicates.\n\n"
+                "Output schema: return the same JSON object shape as extraction "
+                'mode — `{"candidates": [...]}` — with duplicates collapsed.'
+            ),
+        ]
+    )
+
+
+def build_dedup_user_message(grouped_candidates: list[list[dict]]) -> str:
+    import json
+
+    serialised = json.dumps({"groups": grouped_candidates}, ensure_ascii=False, indent=2)
+    return (
+        "Below are candidate lists per window. Merge duplicates and return "
+        "the unified candidates JSON.\n\n" + serialised
+    )
+
+
+def build_canon_change_system_prompt(*, canon_doc_label: str) -> str:
+    intro = (
+        f"You are analysing a new version of the canon document `{canon_doc_label}` "
+        "against the previous active version."
+    )
+    return "\n\n---\n\n".join(
+        [
+            _SHARED_VOICE,
+            intro,
+            _CANON_CHANGE_INSTRUCTIONS,
+            _format_seven_standards(),
+        ]
+    )
+
+
+def build_canon_change_user_message(
+    *,
+    diff_text: str,
+    active_task_titles: Sequence[str],
+) -> str:
+    titles_block = "\n".join(f"- {t}" for t in active_task_titles) or "(none)"
+    return (
+        "Diff between previous and new canon version:\n\n"
+        f"{diff_text or '(no textual diff produced)'}\n\n"
+        "Currently-active task titles:\n"
+        f"{titles_block}\n\n"
+        "Produce the canon-change-analysis JSON now."
+    )
+
+
 def build_obstacle_system_prompt(canon_chunks: Sequence[dict]) -> str:
     sections = [
         _SHARED_VOICE,

@@ -32,6 +32,37 @@ class SubTaskDraftItem:
 
 
 @dataclass
+class ExtractedCandidate:
+    """A task candidate as proposed by the LLM extractor.
+
+    ``extraction_kind`` is one of ``action_item`` (someone committed),
+    ``decision`` (something was decided), ``discussion`` (raised but no
+    commitment). The prompt calibrates confidence: action items >= 0.75,
+    decisions ~0.55-0.7, discussion <= 0.5.
+    """
+
+    title: str
+    description: str
+    suggested_owner: str | None
+    suggested_priority: str
+    suggested_due_date_iso: str | None
+    source_reference: str
+    source_timestamp: str | None
+    confidence: float
+    canon_alignment: str
+    extraction_kind: str
+
+
+@dataclass
+class CanonChangeAnalysis:
+    """LLM impact analysis for a new canon version vs. the prior one."""
+
+    change_summary: str
+    impact_analysis: str
+    affected_task_titles: list[str]
+
+
+@dataclass
 class UnblockDraft:
     """Structured output when the recommendation engine is in unblock mode.
 
@@ -78,6 +109,22 @@ class AIProvider(Protocol):
         system_prompt: str,
         user_message: str,
     ) -> list[SubTaskDraftItem]:
+        ...
+
+    def extract_candidates(
+        self,
+        *,
+        system_prompt: str,
+        user_message: str,
+    ) -> list[ExtractedCandidate]:
+        ...
+
+    def analyze_canon_change(
+        self,
+        *,
+        system_prompt: str,
+        user_message: str,
+    ) -> CanonChangeAnalysis:
         ...
 
 
@@ -197,6 +244,82 @@ class MockAIProvider:
                 canon_reference="Accountability",
             ),
         ]
+
+    def extract_candidates(
+        self,
+        *,
+        system_prompt: str,
+        user_message: str,
+    ) -> list[ExtractedCandidate]:
+        # Three-shaped placeholder so the UI can exercise all confidence
+        # tiers: a high-confidence action item, a medium-confidence
+        # decision, and a low-confidence discussion point.
+        return [
+            ExtractedCandidate(
+                title="Pull a quote from the roofing contractor",
+                description=(
+                    "Owner committed to obtaining a written quote for the east-wing "
+                    "roof repair before the next storm season."
+                ),
+                suggested_owner="Speaker 1",
+                suggested_priority="high",
+                suggested_due_date_iso=None,
+                source_reference="east-wing roof discussion",
+                source_timestamp="02:00 → 03:00",
+                confidence=0.85,
+                canon_alignment="Execution",
+                extraction_kind="action_item",
+            ),
+            ExtractedCandidate(
+                title="Adopt monthly invoice cadence",
+                description=(
+                    "Decision recorded to standardise on a monthly cadence for "
+                    "vendor invoices going forward."
+                ),
+                suggested_owner=None,
+                suggested_priority="medium",
+                suggested_due_date_iso=None,
+                source_reference="invoice cadence",
+                source_timestamp=None,
+                confidence=0.65,
+                canon_alignment="Consistency",
+                extraction_kind="decision",
+            ),
+            ExtractedCandidate(
+                title="Resident communication tone",
+                description=(
+                    "Discussion raised about how warm vs. clinical the move-in "
+                    "letter should sound; no commitment yet."
+                ),
+                suggested_owner=None,
+                suggested_priority="low",
+                suggested_due_date_iso=None,
+                source_reference="resident comms",
+                source_timestamp=None,
+                confidence=0.45,
+                canon_alignment="Care",
+                extraction_kind="discussion",
+            ),
+        ]
+
+    def analyze_canon_change(
+        self,
+        *,
+        system_prompt: str,
+        user_message: str,
+    ) -> CanonChangeAnalysis:
+        return CanonChangeAnalysis(
+            change_summary=(
+                "Mock provider summary: canon revision tightens the standard for "
+                "vendor onboarding and reorders the resident-communication checklist."
+            ),
+            impact_analysis=(
+                "Operators should re-check open vendor tasks against the new "
+                "onboarding wording and confirm any in-flight resident letters "
+                "still match the revised checklist order."
+            ),
+            affected_task_titles=[],
+        )
 
 
 def _refs_from_chunks(context_chunks: list[dict]) -> list[dict]:

@@ -82,7 +82,6 @@ from app.task_candidate_extraction import (
     AIExtractionInterface,
     NullAIExtractor,
     candidate_draft_hints_json,
-    extract_task_candidates_with_heuristics,
 )
 
 logger = logging.getLogger(__name__)
@@ -450,9 +449,31 @@ def activate_canon_source(db: Session, source_id: int) -> SourceDocument | None:
     if not source_document.canonical_doc_id:
         raise ValueError("canonical_doc_id is required before activation")
 
+    from app.repositories import get_active_canon_for_doc_id
+    from app.services.canon_change import detect_canon_change
+
+    previous_active = get_active_canon_for_doc_id(db, source_document.canonical_doc_id)
+
     deactivate_canon_versions(db, source_document.canonical_doc_id)
     source_document.is_active_canon_version = True
     db.add(source_document)
+    db.flush()
+
+    # Detect+persist a CanonChangeEvent before commit so the activation
+    # and the change record land atomically.
+    if previous_active is not None and previous_active.id != source_document.id:
+        try:
+            detect_canon_change(
+                db,
+                new_source=source_document,
+                previous_source=previous_active,
+            )
+        except Exception:
+            logger.exception(
+                "canon change detection failed; activation continues",
+                extra={"context": {"source_id": source_document.id}},
+            )
+
     db.commit()
     db.refresh(source_document)
     return source_document
@@ -466,62 +487,66 @@ def get_canon_history(db: Session, canonical_doc_id: str) -> list[SourceDocument
     return repo_list_canon_history(db, canonical_doc_id)
 
 
+def list_canon_change_events_service(
+    db: Session, *, only_unreviewed: bool = False
+):
+    from app.repositories import list_canon_change_events
+
+    return list_canon_change_events(db, only_unreviewed=only_unreviewed)
+
+
+def get_canon_change_event_service(db: Session, event_id: int):
+    from app.repositories import get_canon_change_event_by_id
+
+    return get_canon_change_event_by_id(db, event_id)
+
+
+def count_unreviewed_canon_change_events(db: Session) -> int:
+    from app.repositories import count_unreviewed_canon_changes
+
+    return count_unreviewed_canon_changes(db)
+
+
+def acknowledge_canon_change_event(db: Session, event_id: int):
+    from app.repositories import (
+        clear_task_canon_update_pending,
+        get_canon_change_event_by_id,
+    )
+
+    event = get_canon_change_event_by_id(db, event_id)
+    if event is None:
+        return None
+    if not event.reviewed:
+        event.reviewed = True
+        db.add(event)
+        # Clearing the pending flag on the affected tasks is the cheapest
+        # signal to the dashboard that the operator has dealt with this
+        # change. If a task is affected by multiple events, the next one
+        # will set the flag again.
+        affected_ids = [int(tid) for tid in (event.affected_task_ids or []) if tid]
+        clear_task_canon_update_pending(db, affected_ids)
+        db.commit()
+        db.refresh(event)
+    return event
+
+
 def extract_task_candidates_from_source(
     db: Session,
     source_id: int,
     ai_extractor: AIExtractionInterface | None = None,
 ) -> list[TaskCandidate] | None:
-    source = get_source_document_by_id(db, source_id)
-    if source is None:
-        return None
-    t0 = time.monotonic()
-    logger.info(
-        "task candidate extraction started",
-        extra={"event": "candidate_extraction_started", "context": {"source_id": source_id}},
+    """Thin wrapper preserving the old call signature for the existing route.
+
+    The ``ai_extractor`` parameter is retained for backwards compatibility
+    with the mail-message extraction tests; for source-document extraction
+    the LLM provider is selected internally via ``get_ai_provider()``.
+    """
+    from app.services.task_extraction import (
+        extract_task_candidates_from_source as _impl,
     )
 
-    extractor = ai_extractor or NullAIExtractor()
-    heuristic = extract_task_candidates_with_heuristics(
-        source_text=source.extracted_text,
-        source_date=source.created_at,
-    )
-    ai_candidates = extractor.extract_candidates(source.extracted_text)
-    all_candidates = [*heuristic, *ai_candidates]
-
-    created: list[TaskCandidate] = []
-    for candidate in all_candidates:
-        row = repo_create_task_candidate(
-            db,
-            {
-                "source_document_id": source.id,
-                "title": candidate.title,
-                "description": candidate.description,
-                "inferred_owner_name": candidate.inferred_owner_name,
-                "inferred_due_at": candidate.inferred_due_at,
-                "fallback_due_at": candidate.fallback_due_at,
-                "review_status": "pending_review",
-                "confidence": candidate.confidence,
-                "hints_json": candidate_draft_hints_json(candidate),
-                "candidate_kind": "new_task",
-            },
-        )
-        created.append(row)
-
-    db.commit()
-    for row in created:
-        db.refresh(row)
-    logger.info(
-        "task candidate extraction completed",
-        extra={
-            "event": "candidate_extraction_completed",
-            "context": {
-                "source_id": source_id,
-                "candidate_count": len(created),
-                "duration_ms": round((time.monotonic() - t0) * 1000, 2),
-            },
-        },
-    )
-    return created
+    del ai_extractor  # not used in the LLM-driven path
+    return _impl(db, source_id)
 
 
 def extract_task_candidates_from_mail_message(

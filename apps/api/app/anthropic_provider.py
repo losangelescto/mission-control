@@ -23,6 +23,8 @@ from typing import Any
 
 from app.providers import (
     AIProvider,
+    CanonChangeAnalysis,
+    ExtractedCandidate,
     MockAIProvider,
     RecommendationDraft,
     SubTaskDraftItem,
@@ -175,6 +177,50 @@ class AnthropicProvider:
                 },
             )
             return self._fallback.generate_subtasks(
+                system_prompt=system_prompt,
+                user_message=user_message,
+            )
+
+    def extract_candidates(
+        self,
+        *,
+        system_prompt: str,
+        user_message: str,
+    ) -> list[ExtractedCandidate]:
+        try:
+            payload = self._call_llm(system_prompt, user_message)
+            return _build_extracted_candidates(payload)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "anthropic candidate extraction failed; returning mock fallback",
+                extra={
+                    "event": "anthropic_extract_candidates_failed",
+                    "context": {"error": str(exc), "model": self._model},
+                },
+            )
+            return self._fallback.extract_candidates(
+                system_prompt=system_prompt,
+                user_message=user_message,
+            )
+
+    def analyze_canon_change(
+        self,
+        *,
+        system_prompt: str,
+        user_message: str,
+    ) -> CanonChangeAnalysis:
+        try:
+            payload = self._call_llm(system_prompt, user_message)
+            return _build_canon_change_analysis(payload)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "anthropic canon-change analysis failed; returning mock fallback",
+                extra={
+                    "event": "anthropic_canon_change_failed",
+                    "context": {"error": str(exc), "model": self._model},
+                },
+            )
+            return self._fallback.analyze_canon_change(
                 system_prompt=system_prompt,
                 user_message=user_message,
             )
@@ -340,4 +386,77 @@ def _build_unblock_draft(payload: dict, context_chunks: list[dict]) -> UnblockDr
         canon_reference=(payload.get("canon_reference") or "").strip()
         or "Canon reference unavailable.",
         source_refs=_refs(context_chunks),
+    )
+
+
+_EXTRACTION_KINDS = {"action_item", "decision", "discussion"}
+_PRIORITY_LEVELS = {"low", "medium", "high"}
+
+
+def _build_extracted_candidates(payload: dict) -> list[ExtractedCandidate]:
+    raw = payload.get("candidates") if isinstance(payload, dict) else None
+    if raw is None and isinstance(payload, list):
+        raw = payload
+    if not isinstance(raw, list):
+        return []
+
+    candidates: list[ExtractedCandidate] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title", "")).strip()
+        if not title:
+            continue
+        kind = str(item.get("extraction_kind", "")).strip().lower()
+        if kind not in _EXTRACTION_KINDS:
+            kind = "discussion"
+        priority = str(item.get("suggested_priority", "")).strip().lower()
+        if priority not in _PRIORITY_LEVELS:
+            priority = "medium"
+        try:
+            confidence = float(item.get("confidence", 0.0))
+        except (TypeError, ValueError):
+            confidence = 0.0
+        confidence = max(0.0, min(1.0, confidence))
+        candidates.append(
+            ExtractedCandidate(
+                title=title[:255],
+                description=str(item.get("description", "")).strip(),
+                suggested_owner=(
+                    str(item.get("suggested_owner")).strip()
+                    if item.get("suggested_owner")
+                    else None
+                ),
+                suggested_priority=priority,
+                suggested_due_date_iso=(
+                    str(item.get("suggested_due_date")).strip()
+                    if item.get("suggested_due_date")
+                    else None
+                ),
+                source_reference=str(item.get("source_reference", "")).strip(),
+                source_timestamp=(
+                    str(item.get("source_timestamp")).strip()
+                    if item.get("source_timestamp")
+                    else None
+                ),
+                confidence=confidence,
+                canon_alignment=str(item.get("canon_alignment", "")).strip(),
+                extraction_kind=kind,
+            )
+        )
+    return candidates
+
+
+def _build_canon_change_analysis(payload: dict) -> CanonChangeAnalysis:
+    titles_raw = payload.get("affected_task_titles", [])
+    if isinstance(titles_raw, list):
+        titles = [str(t).strip() for t in titles_raw if str(t).strip()]
+    else:
+        titles = []
+    return CanonChangeAnalysis(
+        change_summary=(payload.get("change_summary") or "").strip()
+        or "Change summary unavailable from the LLM response.",
+        impact_analysis=(payload.get("impact_analysis") or "").strip()
+        or "No impact analysis was returned.",
+        affected_task_titles=titles,
     )

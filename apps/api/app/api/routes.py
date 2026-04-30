@@ -232,6 +232,17 @@ def update_task_route(task_id: int, payload: TaskUpdate, db: Session = Depends(g
     return TaskResponse.model_validate(updated)
 
 
+@router.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_task_route(task_id: int, db: Session = Depends(get_db)) -> None:
+    from app.services import delete_task_by_id
+
+    if not delete_task_by_id(db, task_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="task not found"
+        )
+    return None
+
+
 @router.post("/tasks/{task_id}/updates", response_model=TaskUpdateResponse, status_code=status.HTTP_201_CREATED)
 def create_task_update_route(
     task_id: int, payload: TaskUpdateCreate, db: Session = Depends(get_db)
@@ -388,6 +399,27 @@ def get_source_route(source_id: int, db: Session = Depends(get_db)) -> SourceDoc
     if source_document is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="source not found")
     return SourceDocumentResponse.model_validate(source_document)
+
+
+@router.delete("/sources/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_source_route(
+    source_id: int,
+    force: bool = Query(default=False, description="override active-canon protection"),
+    db: Session = Depends(get_db),
+) -> None:
+    from app.services import delete_source_by_id
+
+    ok, reason = delete_source_by_id(db, source_id, force=force)
+    if ok:
+        return None
+    if reason == "active_canon_protected":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="cannot delete active canon version; pass ?force=true to override",
+        )
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND, detail="source not found"
+    )
 
 
 @router.post("/canon/register/{source_id}", response_model=SourceDocumentResponse)
@@ -620,6 +652,27 @@ def generate_recommendation_route(
     if recommendation is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="task not found")
     return _recommendation_to_response(recommendation)
+
+
+@router.get("/tasks/{task_id}/recommendation/latest", response_model=RecommendationResponse)
+def get_latest_recommendation_route(
+    task_id: int, db: Session = Depends(get_db)
+) -> RecommendationResponse:
+    """Return the most recent persisted recommendation for the task.
+
+    Pure read — never invokes the LLM. The frontend's task detail panel
+    uses this on mount so it can show the existing recommendation
+    without paying an LLM round-trip on every page load.
+    """
+    task = get_task(db, task_id)
+    if task is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="task not found")
+    rows = list_task_recommendations(db, task_id=task_id, limit=1)
+    if not rows:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="no recommendation yet"
+        )
+    return _recommendation_to_response(rows[0])
 
 
 @router.get("/tasks/{task_id}/recommendations", response_model=list[RecommendationHistoryItem])

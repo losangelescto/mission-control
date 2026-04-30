@@ -5,7 +5,7 @@ from collections.abc import Generator
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -206,3 +206,176 @@ def test_acknowledge_404_when_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     resp = client.post("/canon/changes/9999/acknowledge")
     assert resp.status_code == 404
     app.dependency_overrides.clear()
+
+
+# ─── Fix 4: regression tests for the activate-canon-source pipeline ──
+
+
+def _seed_canon_via_repo(db: Session, *, doc_id: str, version: str, text: str, active: bool):
+    """Insert a canon source already-flagged active (mirrors the upload form
+    path when the user checks 'Activate as the active canon version')."""
+    from app.repositories import create_source_document
+
+    src = create_source_document(
+        db,
+        {
+            "filename": f"{doc_id}-{version}.txt",
+            "source_type": "canon_doc",
+            "canonical_doc_id": doc_id,
+            "version_label": version,
+            "is_active_canon_version": active,
+            "extracted_text": text,
+            "source_path": f"inline:{doc_id}-{version}",
+        },
+    )
+    db.commit()
+    db.refresh(src)
+    return src
+
+
+def test_v1_then_v2_activation_creates_change_event(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """End-to-end: register+activate v1, then upload+register+activate v2.
+    The second activation must create a canon_change_event row.
+
+    Reproduces the case where v2 was uploaded with is_active_canon_version
+    already true — previously the activate hook short-circuited because
+    it found the new source as its own 'previous active'."""
+    _, SessionTesting = _setup_full_db()
+    monkeypatch.setattr(db_module, "SessionLocal", SessionTesting)
+    db: Session = SessionTesting()
+
+    from app.services import activate_canon_source, register_canon_source
+
+    v1 = _seed_canon_via_repo(
+        db, doc_id="fix4-vendor", version="v1",
+        text="Original vendor onboarding policy.", active=False,
+    )
+    register_canon_source(db, v1.id, "fix4-vendor", "v1")
+    activate_canon_source(db, v1.id)
+
+    # v2 uploaded WITH is_active_canon_version=true (the bug-trigger path).
+    v2 = _seed_canon_via_repo(
+        db, doc_id="fix4-vendor", version="v2",
+        text="Updated vendor onboarding policy with stricter timelines.",
+        active=True,
+    )
+    register_canon_source(db, v2.id, "fix4-vendor", "v2")
+    activate_canon_source(db, v2.id)
+
+    from app.models import CanonChangeEvent
+
+    events = list(db.scalars(select(CanonChangeEvent)).all())
+    assert len(events) == 1, f"expected 1 canon_change_event, got {len(events)}"
+    assert events[0].previous_source_id == v1.id
+    assert events[0].new_source_id == v2.id
+    db.close()
+
+
+def test_v2_activation_emits_canon_change_audit_event_with_correct_previous_source_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, SessionTesting = _setup_full_db()
+    monkeypatch.setattr(db_module, "SessionLocal", SessionTesting)
+    db: Session = SessionTesting()
+
+    from app.models import AuditEvent
+    from app.services import activate_canon_source, register_canon_source
+
+    v1 = _seed_canon_via_repo(
+        db, doc_id="fix4-doc-a", version="v1", text="A1", active=False,
+    )
+    register_canon_source(db, v1.id, "fix4-doc-a", "v1")
+    activate_canon_source(db, v1.id)
+
+    v2 = _seed_canon_via_repo(
+        db, doc_id="fix4-doc-a", version="v2", text="A2 changed", active=True,
+    )
+    register_canon_source(db, v2.id, "fix4-doc-a", "v2")
+    activate_canon_source(db, v2.id)
+
+    canon_change_audits = list(
+        db.scalars(
+            select(AuditEvent).where(AuditEvent.action == "canon_change_detected")
+        ).all()
+    )
+    assert len(canon_change_audits) == 1
+    md = canon_change_audits[0].event_metadata or {}
+    assert md.get("canon_doc_id") == "fix4-doc-a"
+    db.close()
+
+
+def test_v2_activation_flips_affected_tasks_canon_update_pending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, SessionTesting = _setup_full_db()
+    monkeypatch.setattr(db_module, "SessionLocal", SessionTesting)
+    db: Session = SessionTesting()
+
+    from app.services import activate_canon_source, register_canon_source
+
+    v1 = _seed_canon_via_repo(
+        db, doc_id="fix4-doc-b", version="v1", text="B1", active=False,
+    )
+    register_canon_source(db, v1.id, "fix4-doc-b", "v1")
+    activate_canon_source(db, v1.id)
+
+    affected = _seed_active_task(
+        db,
+        title="Update vendor onboarding workflow",
+        description="references fix4-doc-b checklist",
+    )
+    db.refresh(affected)
+
+    v2 = _seed_canon_via_repo(
+        db, doc_id="fix4-doc-b", version="v2",
+        text="B2 with stricter timelines", active=True,
+    )
+    register_canon_source(db, v2.id, "fix4-doc-b", "v2")
+    activate_canon_source(db, v2.id)
+
+    db.refresh(affected)
+    assert affected.canon_update_pending is True
+    db.close()
+
+
+def test_v2_activation_audit_metadata_previous_source_id_is_prior_not_new(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression for the audit metadata bug — previous_source_id in the
+    canon_activated event must be the prior version's id, not the new one."""
+    _, SessionTesting = _setup_full_db()
+    monkeypatch.setattr(db_module, "SessionLocal", SessionTesting)
+    db: Session = SessionTesting()
+
+    from app.models import AuditEvent
+    from app.services import activate_canon_source, register_canon_source
+
+    v1 = _seed_canon_via_repo(
+        db, doc_id="fix4-doc-c", version="v1", text="C1", active=False,
+    )
+    register_canon_source(db, v1.id, "fix4-doc-c", "v1")
+    activate_canon_source(db, v1.id)
+
+    v2 = _seed_canon_via_repo(
+        db, doc_id="fix4-doc-c", version="v2", text="C2 changed",
+        active=True,  # the bug-trigger
+    )
+    register_canon_source(db, v2.id, "fix4-doc-c", "v2")
+    activate_canon_source(db, v2.id)
+
+    activations = list(
+        db.scalars(
+            select(AuditEvent)
+            .where(AuditEvent.action == "canon_activated")
+            .where(AuditEvent.entity_id == str(v2.id))
+        ).all()
+    )
+    assert len(activations) == 1
+    md = activations[0].event_metadata or {}
+    assert md.get("previous_source_id") == v1.id, (
+        f"previous_source_id should be v1 ({v1.id}), got {md.get('previous_source_id')}"
+    )
+    assert md.get("previous_source_id") != v2.id
+    db.close()

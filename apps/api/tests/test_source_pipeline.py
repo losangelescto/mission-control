@@ -213,3 +213,205 @@ def test_process_source_handles_missing_file(
         assert "missing" in (source.processing_error or "")
 
     app.dependency_overrides.clear()
+
+
+# ─── Fix 4: auto-extract regression suite ────────────────────────────
+
+
+def _setup_pipeline_with_full_schema(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[TestClient, sessionmaker]:
+    """Pipeline + full task/extraction schema so auto-extract has somewhere
+    to write candidates and audit rows."""
+    from app.models import (
+        AuditEvent, Blocker, CallArtifact, CanonChangeEvent, Delegation,
+        Obstacle, Recommendation, ReviewSession, SubTask, Task, TaskCandidate,
+        TaskUpdate,
+    )
+
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SessionTesting = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+    for model in (
+        SourceDocument, SourceChunk, Task, TaskUpdate, TaskCandidate,
+        CallArtifact, AuditEvent, Blocker, Delegation, ReviewSession,
+        Recommendation, SubTask, Obstacle, CanonChangeEvent,
+    ):
+        model.__table__.create(bind=engine)
+
+    settings = get_settings()
+    settings.sources_upload_dir = str(tmp_path / "uploads")
+
+    def override_get_db() -> Generator[Session, None, None]:
+        db = SessionTesting()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db] = override_get_db
+    monkeypatch.setattr(db_module, "SessionLocal", SessionTesting)
+    return TestClient(app), SessionTesting
+
+
+def _enable_auto_extract(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Override the autouse conftest fixture for tests that need it on."""
+    settings = get_settings()
+    monkeypatch.setattr(settings, "auto_extract_tasks", True)
+
+
+def test_auto_extract_runs_on_text_source_upload(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, SessionTesting = _setup_pipeline_with_full_schema(tmp_path, monkeypatch)
+    _enable_auto_extract(monkeypatch)
+
+    response = client.post(
+        "/sources/upload",
+        data={"source_type": "note"},
+        files={
+            "file": (
+                "auto-extract.txt",
+                b"Action: Owner: Alex follow up by 2026-04-30 - urgent",
+                "text/plain",
+            )
+        },
+    )
+    assert response.status_code == 201
+    source_id = response.json()["source_document"]["id"]
+
+    from app.models import TaskCandidate
+
+    with SessionTesting() as db:
+        candidates = list(
+            db.scalars(
+                select(TaskCandidate).where(TaskCandidate.source_document_id == source_id)
+            ).all()
+        )
+        assert len(candidates) >= 1, "auto-extract should have created candidates"
+
+    app.dependency_overrides.clear()
+
+
+def test_auto_extract_skips_canon_doc_sources(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, SessionTesting = _setup_pipeline_with_full_schema(tmp_path, monkeypatch)
+    _enable_auto_extract(monkeypatch)
+
+    response = client.post(
+        "/sources/upload",
+        data={"source_type": "canon_doc"},
+        files={
+            "file": (
+                "fix4-canon.txt",
+                b"Action: Owner: Alex must follow up urgently to test extraction skip.",
+                "text/plain",
+            )
+        },
+    )
+    source_id = response.json()["source_document"]["id"]
+
+    from app.models import TaskCandidate
+
+    with SessionTesting() as db:
+        candidates = list(
+            db.scalars(
+                select(TaskCandidate).where(TaskCandidate.source_document_id == source_id)
+            ).all()
+        )
+        assert candidates == [], "canon_doc sources must skip auto-extraction"
+
+    app.dependency_overrides.clear()
+
+
+def test_auto_extract_emits_source_processed_audit_with_candidate_count(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, SessionTesting = _setup_pipeline_with_full_schema(tmp_path, monkeypatch)
+    _enable_auto_extract(monkeypatch)
+
+    response = client.post(
+        "/sources/upload",
+        data={"source_type": "note"},
+        files={
+            "file": (
+                "audit-count.txt",
+                b"Action: Owner: Pat follow up with the lender by 2026-05-15 - urgent",
+                "text/plain",
+            )
+        },
+    )
+    source_id = response.json()["source_document"]["id"]
+
+    from app.models import AuditEvent
+
+    with SessionTesting() as db:
+        rows = list(
+            db.scalars(
+                select(AuditEvent)
+                .where(AuditEvent.entity_type == "source")
+                .where(AuditEvent.entity_id == str(source_id))
+                .where(AuditEvent.action == "source_processed")
+            ).all()
+        )
+        assert len(rows) == 1
+        md = rows[0].event_metadata or {}
+        count = md.get("extracted_candidate_count")
+        assert isinstance(count, int) and count >= 1, (
+            f"audit metadata should carry extracted_candidate_count >= 1, got {count!r}"
+        )
+
+    app.dependency_overrides.clear()
+
+
+def test_auto_extract_disabled_when_config_off(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When AUTO_EXTRACT_TASKS=false, no candidates are auto-created."""
+    client, SessionTesting = _setup_pipeline_with_full_schema(tmp_path, monkeypatch)
+    settings = get_settings()
+    monkeypatch.setattr(settings, "auto_extract_tasks", False)
+
+    response = client.post(
+        "/sources/upload",
+        data={"source_type": "note"},
+        files={
+            "file": (
+                "off.txt",
+                b"Action: should not auto-extract because the flag is off.",
+                "text/plain",
+            )
+        },
+    )
+    source_id = response.json()["source_document"]["id"]
+
+    from app.models import AuditEvent, TaskCandidate
+
+    with SessionTesting() as db:
+        candidates = list(
+            db.scalars(
+                select(TaskCandidate).where(TaskCandidate.source_document_id == source_id)
+            ).all()
+        )
+        assert candidates == []
+
+        # The source_processed audit event still fires; its candidate count
+        # is None because extraction was skipped (not zero, which would
+        # mean it ran and produced nothing).
+        rows = list(
+            db.scalars(
+                select(AuditEvent)
+                .where(AuditEvent.entity_type == "source")
+                .where(AuditEvent.entity_id == str(source_id))
+                .where(AuditEvent.action == "source_processed")
+            ).all()
+        )
+        assert len(rows) == 1
+        md = rows[0].event_metadata or {}
+        assert md.get("extracted_candidate_count") is None
+
+    app.dependency_overrides.clear()

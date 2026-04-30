@@ -204,6 +204,7 @@ def build_standard_system_prompt(
     history_summary: dict | None,
     subtasks: Sequence[dict] | None = None,
     active_obstacles: Sequence[dict] | None = None,
+    resolved_obstacles: Sequence[dict] | None = None,
 ) -> str:
     """Return the full system prompt for a standard recommendation call."""
     sections = [
@@ -217,6 +218,7 @@ def build_standard_system_prompt(
         _format_history_summary(history_summary),
         format_subtask_progress(subtasks or []),
         format_active_obstacles(active_obstacles or []),
+        format_resolved_obstacles(resolved_obstacles or []),
     ]
     return "\n\n---\n\n".join(s for s in sections if s)
 
@@ -250,6 +252,7 @@ def build_unblock_system_prompt(
     history_summary: dict | None,
     subtasks: Sequence[dict] | None = None,
     active_obstacles: Sequence[dict] | None = None,
+    resolved_obstacles: Sequence[dict] | None = None,
 ) -> str:
     """Return the full system prompt for an unblock-mode call."""
     sections = [
@@ -263,6 +266,7 @@ def build_unblock_system_prompt(
         _format_history_summary(history_summary),
         format_subtask_progress(subtasks or []),
         format_active_obstacles(active_obstacles or []),
+        format_resolved_obstacles(resolved_obstacles or []),
     ]
     return "\n\n---\n\n".join(s for s in sections if s)
 
@@ -566,6 +570,39 @@ def format_active_obstacles(obstacles: Sequence[dict]) -> str:
                 f"      {len(proposals)} proposed solution(s) already generated — "
                 f"build on them rather than duplicate."
             )
+    return "\n".join(lines)
+
+
+def format_resolved_obstacles(obstacles: Sequence[dict]) -> str:
+    """Format recently-resolved obstacles so the LLM can build on what just got unstuck.
+
+    Each obstacle dict is expected to carry ``description``, ``impact``,
+    ``resolution_notes``, and ``resolved_ago_days`` (an integer). When no
+    obstacles are passed, returns an empty string so the section is dropped
+    from the prompt entirely.
+    """
+    if not obstacles:
+        return ""
+    lines = [f"Recently resolved obstacles ({len(obstacles)}):"]
+    for o in obstacles:
+        desc = (o.get("description") or "").strip()
+        impact = (o.get("impact") or "").strip()
+        notes = (o.get("resolution_notes") or "").strip()
+        ago_days = o.get("resolved_ago_days")
+        ago_label = (
+            f"resolved {ago_days} day{'s' if ago_days != 1 else ''} ago"
+            if isinstance(ago_days, int)
+            else "recently resolved"
+        )
+        lines.append(f"  - [{ago_label}] {desc}")
+        if impact:
+            lines.append(f"      impact: {impact}")
+        if notes:
+            lines.append(f"      resolution: {notes}")
+    lines.append(
+        "Build on these resolutions — do NOT propose paths that were just tried "
+        "unless explicitly extending them."
+    )
     return "\n".join(lines)
 
 

@@ -5,49 +5,16 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { apiClient } from "@/lib/api/client";
-import type { SearchResponse, SearchResult, SearchResultType } from "@/lib/api/types";
+import type { SearchResponse } from "@/lib/api/types";
+import {
+  TYPE_ICON,
+  TYPE_LABEL,
+  groupSearchResults,
+} from "@/lib/search-grouping";
 
 const DEBOUNCE_MS = 300;
 const MIN_QUERY = 3;
 const PREVIEW_LIMIT = 8;
-
-const TYPE_LABEL: Record<SearchResultType, string> = {
-  task: "Task",
-  task_update: "Update",
-  sub_task: "Sub-task",
-  obstacle: "Obstacle",
-  source: "Source",
-  source_chunk: "Source",
-  review: "Review",
-  canon: "Canon",
-};
-
-const TYPE_ICON: Record<SearchResultType, string> = {
-  task: "▣",
-  task_update: "▤",
-  sub_task: "▢",
-  obstacle: "▲",
-  source: "▦",
-  source_chunk: "▦",
-  review: "✎",
-  canon: "★",
-};
-
-const GROUP_ORDER: { key: string; types: SearchResultType[]; label: string }[] = [
-  { key: "tasks", types: ["task", "task_update", "sub_task", "obstacle"], label: "Tasks" },
-  { key: "sources", types: ["source", "source_chunk"], label: "Sources" },
-  { key: "reviews", types: ["review"], label: "Reviews" },
-  { key: "canon", types: ["canon"], label: "Canon" },
-];
-
-function groupResults(results: SearchResult[]) {
-  const groups: { label: string; key: string; items: SearchResult[] }[] = [];
-  for (const g of GROUP_ORDER) {
-    const items = results.filter((r) => g.types.includes(r.type));
-    if (items.length > 0) groups.push({ label: g.label, key: g.key, items });
-  }
-  return groups;
-}
 
 export default function SearchBar() {
   const router = useRouter();
@@ -128,11 +95,16 @@ export default function SearchBar() {
     router.push(url);
   }
 
-  const grouped = data ? groupResults(data.results) : [];
+  const grouped = groupSearchResults(data?.results);
   const showDropdown = open && query.trim().length >= MIN_QUERY;
+  const hasResults = grouped.length > 0;
 
   return (
-    <div ref={containerRef} className="search-bar" style={{ position: "relative", flex: 1, maxWidth: "32rem" }}>
+    <div
+      ref={containerRef}
+      className="search-bar"
+      style={{ position: "relative", flex: 1, maxWidth: "32rem" }}
+    >
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -167,7 +139,6 @@ export default function SearchBar() {
 
       {showDropdown ? (
         <div
-          role="listbox"
           style={{
             position: "absolute",
             top: "calc(100% + 4px)",
@@ -177,68 +148,111 @@ export default function SearchBar() {
             maxHeight: "60vh",
             overflowY: "auto",
             background: "var(--panel, #fff)",
+            color: "var(--text, #111)",
             border: "1px solid var(--border, #d1d5db)",
             borderRadius: "6px",
             boxShadow: "0 6px 24px rgba(0,0,0,0.18)",
           }}
+          data-testid="search-dropdown"
         >
           {loading && !data ? (
             <div className="small" style={{ padding: "0.6rem" }}>
               Searching…
             </div>
           ) : null}
-          {!loading && data && data.results.length === 0 ? (
+          {!loading && data && !hasResults ? (
             <div className="small" style={{ padding: "0.6rem" }}>
               No matches.
             </div>
           ) : null}
-          {grouped.map((group) => (
-            <div key={group.key}>
-              <div
-                className="small"
-                style={{
-                  padding: "0.35rem 0.6rem",
-                  background: "var(--panel-alt, #f3f4f6)",
-                  fontWeight: 600,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.04em",
-                }}
-              >
-                {group.label}
-              </div>
-              {group.items.map((r) => (
-                <button
-                  key={`${r.type}-${r.id}-${r.url}`}
-                  type="button"
-                  onClick={() => onResultClick(r.url)}
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    textAlign: "left",
-                    padding: "0.5rem 0.6rem",
-                    background: "transparent",
-                    border: "none",
-                    borderTop: "1px solid var(--border-subtle, #e5e7eb)",
-                    cursor: "pointer",
-                    color: "inherit",
-                  }}
-                >
-                  <div style={{ display: "flex", gap: "0.5rem", alignItems: "baseline" }}>
-                    <span aria-hidden="true">{TYPE_ICON[r.type]}</span>
-                    <strong style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {r.title}
-                    </strong>
-                    <span className="badge">{TYPE_LABEL[r.type]}</span>
-                  </div>
+
+          {hasResults ? (
+            <ul
+              role="listbox"
+              aria-label="Search results"
+              style={{ listStyle: "none", margin: 0, padding: 0 }}
+            >
+              {grouped.map((group) => (
+                <li key={group.key} role="presentation" data-testid={`search-group-${group.key}`}>
                   <div
                     className="small"
-                    style={{ marginTop: "0.2rem" }}
-                    dangerouslySetInnerHTML={{ __html: r.snippet }}
-                  />
-                </button>
+                    style={{
+                      padding: "0.35rem 0.6rem",
+                      background: "var(--panel-alt, #f3f4f6)",
+                      fontWeight: 600,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.04em",
+                    }}
+                  >
+                    {group.label}
+                  </div>
+                  <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+                    {group.items.map((r) => (
+                      <li
+                        key={`${r.type}-${r.id}-${r.url}`}
+                        role="option"
+                        aria-selected="false"
+                        data-testid={`search-result-${r.type}-${r.id}`}
+                        style={{
+                          borderTop: "1px solid var(--border-subtle, #e5e7eb)",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => onResultClick(r.url)}
+                          style={{
+                            display: "flex",
+                            width: "100%",
+                            gap: "0.5rem",
+                            alignItems: "baseline",
+                            padding: "0.5rem 0.6rem 0.1rem",
+                            background: "transparent",
+                            border: "none",
+                            textAlign: "left",
+                            cursor: "pointer",
+                            color: "inherit",
+                            font: "inherit",
+                          }}
+                        >
+                          <span aria-hidden="true">{TYPE_ICON[r.type]}</span>
+                          <strong
+                            style={{
+                              flex: 1,
+                              minWidth: 0,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {r.title}
+                          </strong>
+                          <span className="badge">{TYPE_LABEL[r.type]}</span>
+                        </button>
+                        {/*
+                          Snippet rendered OUTSIDE the button. The previous
+                          structure put a <div dangerouslySetInnerHTML> inside
+                          the <button>, which left the row visually empty in
+                          some browsers under React strict-mode hydration.
+                          Sibling div + clickable wrapper avoids the issue.
+                        */}
+                        <div
+                          onClick={() => onResultClick(r.url)}
+                          className="small"
+                          style={{
+                            padding: "0 0.6rem 0.5rem 1.6rem",
+                            cursor: "pointer",
+                            color: "var(--text-muted, #4b5563)",
+                          }}
+                          dangerouslySetInnerHTML={{ __html: r.snippet || "" }}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </li>
               ))}
-            </div>
-          ))}
+            </ul>
+          ) : null}
+
           <div
             style={{
               borderTop: "1px solid var(--border-subtle, #e5e7eb)",
@@ -250,6 +264,7 @@ export default function SearchBar() {
               href={`/search?q=${encodeURIComponent(query)}`}
               onClick={() => setOpen(false)}
               className="small"
+              data-testid="search-see-all"
             >
               See all results{data ? ` (${data.total})` : ""} →
             </Link>

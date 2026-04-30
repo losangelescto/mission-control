@@ -245,6 +245,74 @@ def test_status_change_emits_dedicated_status_changed_event(
     app.dependency_overrides.clear()
 
 
+def test_task_update_creation_emits_audit_and_appears_in_audit_task(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Posting a task update logs a `task_update.created` audit row and that
+    row surfaces under /audit/task/{id} (entity_type='task_update' rows are
+    matched against the task's update ids)."""
+    _, SessionTesting = _setup_full_db()
+
+    def override_get_db() -> Generator[Session, None, None]:
+        d = SessionTesting()
+        try:
+            yield d
+        finally:
+            d.close()
+
+    app.dependency_overrides[get_db] = override_get_db
+    monkeypatch.setattr(db_module, "SessionLocal", SessionTesting)
+    client = TestClient(app)
+
+    create = client.post(
+        "/tasks",
+        json={
+            "title": "Update audit task",
+            "description": "",
+            "objective": "",
+            "standard": "Consistency",
+            "status": "backlog",
+            "priority": "medium",
+            "owner_name": "alex",
+            "assigner_name": "jordan",
+        },
+    )
+    assert create.status_code == 201
+    task_id = create.json()["id"]
+
+    upd = client.post(
+        f"/tasks/{task_id}/updates",
+        json={
+            "update_type": "note",
+            "summary": "Talked with vendor about lead time",
+            "what_happened": "",
+            "options_considered": "",
+            "steps_taken": "",
+            "next_step": "",
+            "created_by": "alex",
+        },
+    )
+    assert upd.status_code in (200, 201)
+    update_id = upd.json()["id"]
+
+    # Direct entity-type filter — the row exists.
+    rows = client.get(f"/audit?entity_type=task_update&entity_id={update_id}").json()
+    actions = [e["action"] for e in rows["events"]]
+    assert "created" in actions
+
+    # /audit/task surfaces it via the update-id join.
+    by_task = client.get(f"/audit/task/{task_id}").json()
+    update_actions = [
+        e for e in by_task["events"]
+        if e["entity_type"] == "task_update" and e["entity_id"] == str(update_id)
+    ]
+    assert len(update_actions) == 1
+    assert update_actions[0]["action"] == "created"
+    assert update_actions[0]["actor"] == "alex"
+
+    app.dependency_overrides.clear()
+
+
 def test_audit_filter_by_action_and_actor(monkeypatch: pytest.MonkeyPatch) -> None:
     _, SessionTesting = _setup_full_db()
     db: Session = SessionTesting()

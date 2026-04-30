@@ -186,6 +186,83 @@ def test_format_timestamp_handles_floats_and_strings() -> None:
     assert _format_timestamp("notanumber") == "00:00"
 
 
+def test_verbatim_catchall_suppressed_when_llm_produces_good_candidates() -> None:
+    """A heuristic line that is just a verbatim copy of input (no urgency,
+    blocker, recurrence, completion, or delegation hints) should be dropped
+    when the LLM returns a high-signal candidate.
+    """
+    _, SessionTesting = _setup_engine_and_session()
+    db: Session = SessionTesting()
+
+    # Plain "todo" line — no urgency words, no owner, no date, no hints.
+    # This trips the heuristic but provides nothing the LLM didn't see.
+    source = SourceDocument(
+        filename="thread.txt",
+        source_type="thread_export",
+        is_active_canon_version=False,
+        extracted_text="todo: figure out the vendor situation",
+        source_path="inline:thread.txt",
+    )
+    db.add(source)
+    db.commit()
+    db.refresh(source)
+
+    class _GoodLLM:
+        def extract_candidates(self, *, system_prompt: str, user_message: str):
+            return [
+                ExtractedCandidate(
+                    title="Confirm vendor delivery date with Alex",
+                    description="Alex committed to lock in the delivery date this week.",
+                    suggested_owner="Alex",
+                    suggested_priority="high",
+                    suggested_due_date_iso=None,
+                    source_reference="vendor situation",
+                    source_timestamp=None,
+                    confidence=0.85,
+                    canon_alignment="Accountability",
+                    extraction_kind="action_item",
+                )
+            ]
+
+    rows = extract_task_candidates_from_source(db, source.id, ai_provider=_GoodLLM())
+    assert rows is not None
+    # No verbatim heuristic row should remain; every persisted row must be
+    # the LLM candidate.
+    titles = [r.title for r in rows]
+    assert "todo: figure out the vendor situation" not in titles
+    assert any(t.startswith("Confirm vendor delivery date") for t in titles)
+    assert all((r.hints_json or {}).get("llm_extracted") for r in rows)
+    db.close()
+
+
+def test_verbatim_catchall_kept_when_llm_returns_nothing() -> None:
+    """If the LLM produces nothing, the heuristic catch-all is the only
+    signal we have — never strip it down to empty."""
+    _, SessionTesting = _setup_engine_and_session()
+    db: Session = SessionTesting()
+
+    source = SourceDocument(
+        filename="thread.txt",
+        source_type="thread_export",
+        is_active_canon_version=False,
+        extracted_text="todo: figure out the vendor situation",
+        source_path="inline:thread.txt",
+    )
+    db.add(source)
+    db.commit()
+    db.refresh(source)
+
+    class _SilentLLM:
+        def extract_candidates(self, *, system_prompt: str, user_message: str):
+            return []
+
+    rows = extract_task_candidates_from_source(db, source.id, ai_provider=_SilentLLM())
+    assert rows is not None
+    assert len(rows) >= 1
+    assert any("vendor situation" in (r.title or "") for r in rows)
+    db.close()
+
+
 def test_long_transcript_invokes_dedup_pass() -> None:
     """Transcripts longer than the window size go through dedup.
 

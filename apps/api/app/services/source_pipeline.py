@@ -89,12 +89,16 @@ def process_source(db: Session, source_id: int) -> SourceDocument | None:
         _mark_failed(db, source, f"unhandled error: {exc}")
 
     db.refresh(source)
-    _emit_processing_audit(db, source)
-    _maybe_auto_extract(db, source)
+    # Run extraction first, then emit the audit so the audit metadata can
+    # carry the candidate count produced by this ingestion.
+    extracted_count = _maybe_auto_extract(source.id, source.source_type)
+    _emit_processing_audit(db, source, extracted_count=extracted_count)
     return source
 
 
-def _emit_processing_audit(db: Session, source: SourceDocument) -> None:
+def _emit_processing_audit(
+    db: Session, source: SourceDocument, *, extracted_count: int | None
+) -> None:
     """Record one audit event reflecting the terminal processing state."""
     from app.services.audit import log_event
 
@@ -113,6 +117,7 @@ def _emit_processing_audit(db: Session, source: SourceDocument) -> None:
             "pages_total": source.pages_total,
             "pages_processed": source.pages_processed,
             "error": (source.processing_error or "")[:200] if status == "failed" else None,
+            "extracted_candidate_count": extracted_count,
         },
     )
     db.commit()
@@ -316,32 +321,57 @@ def _process_text(db: Session, source: SourceDocument, path: Path) -> None:
 # ─── Helpers ─────────────────────────────────────────────────────────
 
 
-def _maybe_auto_extract(db: Session, source: SourceDocument) -> None:
+def _maybe_auto_extract(source_id: int, source_type: str) -> int | None:
     """Run task extraction after a successful ingest unless disabled.
 
+    Returns the candidate count (or ``None`` when the extraction was
+    skipped) so the caller can include it in the source-processed audit
+    event.
+
+    Uses a fresh ``SessionLocal()`` rather than the BG-task's existing
+    session. The pipeline session has been mutating the source row across
+    several commits + savepoints; running an LLM-bounded extraction on
+    top of that exposed flush ordering bugs that left the session in an
+    inconsistent state, so candidates were never persisted. A new session
+    isolates the extract phase and gives clean rollback semantics on
+    failure.
+
     Canon documents are skipped — they describe standards, not action
-    items. Sources that finished as ``failed`` are also skipped because
-    there is nothing useful to extract from.
+    items. Failed/queued sources are skipped because there is nothing
+    useful to extract from.
     """
     settings = get_settings()
     if not settings.auto_extract_tasks:
-        return
-    if source.processing_status not in ("complete", "partial"):
-        return
-    if source.source_type == "canon_doc":
-        return
-    if not (source.extracted_text or "").strip():
-        return
+        return None
+    if source_type == "canon_doc":
+        return None
 
+    extract_db = db_module.SessionLocal()
     try:
+        source = get_source_document_by_id(extract_db, source_id)
+        if source is None:
+            return None
+        if source.processing_status not in ("complete", "partial"):
+            return None
+        if not (source.extracted_text or "").strip():
+            return 0
+
         from app.services.task_extraction import extract_task_candidates_from_source
 
-        extract_task_candidates_from_source(db, source.id)
+        candidates = extract_task_candidates_from_source(extract_db, source_id)
+        return len(candidates) if candidates is not None else 0
     except Exception:
         logger.exception(
             "auto-extraction failed",
-            extra={"context": {"source_id": source.id}},
+            extra={"context": {"source_id": source_id}},
         )
+        try:
+            extract_db.rollback()
+        except Exception:
+            pass
+        return None
+    finally:
+        extract_db.close()
 
 
 def _mark_failed(db: Session, source: SourceDocument, reason: str) -> None:

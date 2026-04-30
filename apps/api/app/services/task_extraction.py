@@ -35,6 +35,7 @@ from app.repositories import (
     get_source_document_by_id,
 )
 from app.task_candidate_extraction import (
+    CandidateDraft,
     candidate_draft_hints_json,
     extract_task_candidates_with_heuristics,
 )
@@ -80,6 +81,15 @@ def extract_task_candidates_from_source(
     )
 
     llm_candidates = _run_llm_extraction(provider=provider, source=source)
+
+    # When the LLM produces at least one high-signal candidate, drop
+    # heuristic rows that are just verbatim copies of input lines with no
+    # hints — they're noise alongside a real LLM result. We never strip
+    # the heuristic list to empty; if the LLM produced nothing, the
+    # heuristic catch-all is still the operator's only signal.
+    heuristic = _suppress_verbatim_catchalls(
+        heuristic=heuristic, llm_candidates=llm_candidates
+    )
 
     fallback_due = (source.created_at + timedelta(days=7)).replace(tzinfo=UTC)
     created: list[TaskCandidate] = []
@@ -266,6 +276,61 @@ def _llm_candidate_to_row(
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────
+
+
+def _llm_candidates_are_high_signal(
+    llm_candidates: list[ExtractedCandidate],
+) -> bool:
+    """True when at least one LLM candidate is action-shaped or confident.
+
+    Threshold mirrors the prompt: ``action_item`` is the LLM's strongest
+    signal that someone explicitly committed; ``confidence >= 0.6`` covers
+    decisions/actions just below that bar.
+    """
+    for cand in llm_candidates:
+        if cand.extraction_kind == "action_item":
+            return True
+        if cand.confidence >= 0.6:
+            return True
+    return False
+
+
+def _is_verbatim_catchall(draft: CandidateDraft) -> bool:
+    """A heuristic draft with no real hint signal beyond the raw line.
+
+    The heuristic always copies the source line into ``title`` and bolts
+    on hint strings in ``description``. When every hint list is empty,
+    the row carries no information the LLM didn't already see.
+    """
+    return not (
+        draft.urgency_hints
+        or draft.blocker_hints
+        or draft.recurrence_hints
+        or draft.completion_hints
+        or draft.delegation_hints
+    )
+
+
+def _suppress_verbatim_catchalls(
+    *,
+    heuristic: list[CandidateDraft],
+    llm_candidates: list[ExtractedCandidate],
+) -> list[CandidateDraft]:
+    """Drop hint-less heuristic drafts when the LLM produced real candidates.
+
+    Never returns an empty list when the LLM produced nothing — falling
+    back to the heuristic is the whole point of having one.
+    """
+    if not llm_candidates or not _llm_candidates_are_high_signal(llm_candidates):
+        return heuristic
+    filtered = [d for d in heuristic if not _is_verbatim_catchall(d)]
+    if not filtered and heuristic:
+        # Defensive: never wipe the heuristic list to empty if it was the
+        # only signal — but if LLM is high-signal, an all-empty filtered
+        # list means every heuristic row was noise. The LLM rows below
+        # cover the real action items, so dropping the noise is correct.
+        return []
+    return filtered
 
 
 _SOURCE_KIND_LABELS = {

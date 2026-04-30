@@ -161,6 +161,19 @@ export const apiClient = {
     return apiFetch<RecommendationHistoryItem[]>(`/tasks/${taskId}/recommendations`);
   },
 
+  async getLatestRecommendation(taskId: number): Promise<Recommendation | null> {
+    const response = await fetch(`${API_BASE_URL}/tasks/${taskId}/recommendation/latest`, {
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+    });
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(`Latest recommendation fetch failed (${response.status}): ${detail}`);
+    }
+    return (await response.json()) as Recommendation;
+  },
+
   async getReviews(params?: {
     task_id?: number;
     owner?: string;
@@ -253,6 +266,60 @@ export const apiClient = {
       method: "POST",
       body: JSON.stringify({ resolution_notes: resolutionNotes }),
     });
+  },
+
+  async createTask(payload: {
+    title: string;
+    description: string;
+    objective: string;
+    standard: string;
+    status: TaskStatus;
+    priority: string;
+    owner_name: string;
+    assigner_name: string;
+    due_at?: string | null;
+    source_confidence?: number | null;
+  }): Promise<Task> {
+    return apiFetch<Task>("/tasks", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async deleteTask(taskId: number): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/tasks/${taskId}`, {
+      method: "DELETE",
+    });
+    if (!response.ok && response.status !== 204) {
+      const detail = await response.text();
+      throw new Error(`DELETE /tasks/${taskId} failed (${response.status}): ${detail}`);
+    }
+  },
+
+  async uploadSource(formData: FormData): Promise<{ source_document: SourceDocument; chunk_count: number }> {
+    const response = await fetch(`${API_BASE_URL}/sources/upload`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(`Upload failed (${response.status}): ${detail}`);
+    }
+    return (await response.json()) as { source_document: SourceDocument; chunk_count: number };
+  },
+
+  async deleteSource(sourceId: number, force = false): Promise<void> {
+    const url = force
+      ? `${API_BASE_URL}/sources/${sourceId}?force=true`
+      : `${API_BASE_URL}/sources/${sourceId}`;
+    const response = await fetch(url, { method: "DELETE" });
+    if (response.status === 409) {
+      throw new Error("ACTIVE_CANON_PROTECTED");
+    }
+    if (!response.ok && response.status !== 204) {
+      const detail = await response.text();
+      throw new Error(`DELETE /sources/${sourceId} failed (${response.status}): ${detail}`);
+    }
   },
 
   async getTaskAuditLog(taskId: number, limit = 200): Promise<AuditListResponse> {

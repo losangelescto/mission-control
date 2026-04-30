@@ -270,3 +270,64 @@ def test_recommendation_context_includes_subtasks_and_obstacles() -> None:
     assert ctx["active_obstacles"] == 1
 
     app.dependency_overrides.clear()
+
+
+def test_resolved_obstacle_resolution_notes_flow_into_prompt_and_bust_cache() -> None:
+    """Resolving an obstacle should both:
+       - inject its resolution_notes into the next recommendation prompt
+       - bust the cache so the recommendation is regenerated, not cached.
+    """
+    from app.providers import MockAIProvider, RecommendationDraft
+    from app.services import (
+        create_obstacle_for_task,
+        generate_task_recommendation,
+        resolve_obstacle_by_id,
+    )
+
+    TestingSessionLocal = _build_test_db()
+    _override_db(TestingSessionLocal)
+    client = TestClient(app)
+    task_id = _create_task(client)
+
+    # Capture the system prompt the provider sees on each call.
+    captured_prompts: list[str] = []
+
+    class CapturingProvider(MockAIProvider):
+        def generate_recommendation(self, *, system_prompt=None, **kwargs):  # type: ignore[override]
+            captured_prompts.append(system_prompt or "")
+            return RecommendationDraft(
+                objective=kwargs.get("objective", ""),
+                standard=kwargs.get("standard", ""),
+                first_principles_plan="plan",
+                viable_options=["a", "b"],
+                next_action="do it",
+                source_refs=[],
+            )
+
+    db = TestingSessionLocal()
+    obstacle = create_obstacle_for_task(
+        db, task_id, {"description": "Vendor unresponsive", "impact": "delays kickoff"}
+    )
+    assert obstacle is not None
+
+    provider = CapturingProvider()
+    rec1 = generate_task_recommendation(db, task_id, ai_provider=provider)
+    assert rec1 is not None
+    assert any("Active obstacles" in p for p in captured_prompts)
+
+    # Resolve the obstacle with a distinctive note.
+    note = "Vendor confirmed start date — booked Tuesday"
+    resolve_obstacle_by_id(db, obstacle.id, note)
+
+    rec2 = generate_task_recommendation(db, task_id, ai_provider=provider)
+    assert rec2 is not None
+    # Cache must bust: id changes because the input bundle changed.
+    assert rec2.id != rec1.id
+    # Most recent captured prompt must include the resolution_notes string.
+    assert any(note in p for p in captured_prompts[-1:]), (
+        "resolution_notes did not flow into the recommendation prompt"
+    )
+    assert "Recently resolved obstacles" in captured_prompts[-1]
+
+    db.close()
+    app.dependency_overrides.clear()

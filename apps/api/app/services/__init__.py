@@ -207,11 +207,93 @@ def update_task(db: Session, task_id: int, updates: dict) -> Task | None:
     return updated
 
 
+def delete_task_by_id(db: Session, task_id: int, *, actor: str = "system") -> bool:
+    """Delete a task + all dependent rows. Emits a ``deleted`` audit event.
+
+    Past audit history for the task is preserved on purpose — operators
+    investigating "what happened to task 42" still need to see the trail.
+    Only the entity rows (task + children) are removed.
+    """
+    from app.repositories import delete_task as repo_delete_task
+    from app.services.audit import log_event
+
+    task = get_task_by_id(db, task_id)
+    if task is None:
+        return False
+
+    snapshot = _task_audit_payload(task)
+    log_event(
+        db,
+        entity_type="task",
+        entity_id=task.id,
+        action="deleted",
+        actor=actor,
+        changes={"task": snapshot},
+    )
+    repo_delete_task(db, task_id)
+    db.commit()
+    return True
+
+
+def delete_source_by_id(
+    db: Session, source_id: int, *, actor: str = "system", force: bool = False
+) -> tuple[bool, str | None]:
+    """Delete a source + cascading children. Refuses active canon unless ``force``.
+
+    Returns ``(success, error_code)`` where ``error_code`` is one of
+    ``"not_found"`` or ``"active_canon_protected"``.
+    """
+    from app.repositories import delete_source as repo_delete_source
+    from app.services.audit import log_event
+
+    source = get_source_document_by_id(db, source_id)
+    if source is None:
+        return False, "not_found"
+    if source.is_active_canon_version and not force:
+        return False, "active_canon_protected"
+
+    snapshot = {
+        "id": source.id,
+        "filename": source.filename,
+        "source_type": source.source_type,
+        "canonical_doc_id": source.canonical_doc_id,
+        "version_label": source.version_label,
+        "is_active_canon_version": source.is_active_canon_version,
+    }
+    log_event(
+        db,
+        entity_type="source",
+        entity_id=source.id,
+        action="deleted",
+        actor=actor,
+        changes={"source": snapshot},
+        metadata={"force": force},
+    )
+    repo_delete_source(db, source_id)
+    db.commit()
+    return True, None
+
+
 def create_task_update(db: Session, task_id: int, payload: dict) -> TaskUpdate | None:
+    from app.services.audit import SYSTEM_ACTOR, log_event
+
     task = get_task_by_id(db, task_id)
     if task is None:
         return None
     update = repo_create_task_update(db, {"task_id": task_id, **payload})
+    log_event(
+        db,
+        entity_type="task_update",
+        entity_id=update.id,
+        action="created",
+        actor=update.created_by or SYSTEM_ACTOR,
+        changes={
+            "summary": update.summary,
+            "update_type": update.update_type,
+            "next_step": update.next_step,
+        },
+        metadata={"task_id": task_id},
+    )
     db.commit()
     db.refresh(update)
     return update
@@ -478,7 +560,18 @@ def activate_canon_source(db: Session, source_id: int) -> SourceDocument | None:
     from app.repositories import get_active_canon_for_doc_id
     from app.services.canon_change import detect_canon_change
 
-    previous_active = get_active_canon_for_doc_id(db, source_document.canonical_doc_id)
+    # Look up the prior active version EXCLUDING the source we're about to
+    # activate. Without the exclusion, sources uploaded with
+    # is_active_canon_version=true (via the upload form) would be returned
+    # as their own "previous" version, short-circuiting the change-detection
+    # hook AND polluting the audit metadata. Capture the id immediately so
+    # later reorderings can't accidentally swap in the new source.
+    previous_active = get_active_canon_for_doc_id(
+        db,
+        source_document.canonical_doc_id,
+        exclude_source_id=source_document.id,
+    )
+    previous_source_id_for_audit = previous_active.id if previous_active else None
 
     deactivate_canon_versions(db, source_document.canonical_doc_id)
     source_document.is_active_canon_version = True
@@ -486,9 +579,14 @@ def activate_canon_source(db: Session, source_id: int) -> SourceDocument | None:
     db.flush()
 
     # Detect+persist a CanonChangeEvent before commit so the activation
-    # and the change record land atomically.
+    # and the change record land atomically. The LLM call inside
+    # detect_canon_change is bounded by the Anthropic SDK's 30s timeout
+    # (anthropic_provider.py constructs the client with timeout=30.0)
+    # and the whole call is wrapped in try/except — a slow or failing
+    # LLM degrades to an "empty analysis" event but never blocks the
+    # activate route.
     change_event = None
-    if previous_active is not None and previous_active.id != source_document.id:
+    if previous_active is not None:
         try:
             change_event = detect_canon_change(
                 db,
@@ -511,7 +609,7 @@ def activate_canon_source(db: Session, source_id: int) -> SourceDocument | None:
         metadata={
             "canonical_doc_id": source_document.canonical_doc_id,
             "version_label": source_document.version_label,
-            "previous_source_id": previous_active.id if previous_active else None,
+            "previous_source_id": previous_source_id_for_audit,
         },
     )
     if change_event is not None:
@@ -1222,6 +1320,7 @@ def _compute_context_hash(
     mode: str,
     subtasks: list[dict] | None = None,
     active_obstacles: list[dict] | None = None,
+    resolved_obstacles: list[dict] | None = None,
 ) -> str:
     """Hex sha256 of the normalised input bundle.
 
@@ -1248,6 +1347,17 @@ def _compute_context_hash(
             {"id": s.get("id"), "status": s.get("status")} for s in (subtasks or [])
         ],
         "obstacles": [{"id": o.get("id")} for o in (active_obstacles or [])],
+        # Bust cache the moment an obstacle is resolved (or its resolution
+        # notes are edited) so the next recommendation incorporates the new
+        # context instead of returning a stale cached answer.
+        "resolved_obstacles": [
+            {
+                "id": o.get("id"),
+                "resolved_at": o.get("resolved_at_iso"),
+                "notes_len": len(o.get("resolution_notes") or ""),
+            }
+            for o in (resolved_obstacles or [])
+        ],
     }
     raw = _json.dumps(bundle, sort_keys=True, default=str)
     return _hashlib.sha256(raw.encode("utf-8")).hexdigest()
@@ -1293,6 +1403,7 @@ def generate_task_recommendation(
     # and currently-known blockers instead of repeating itself.
     from app.repositories import (
         list_active_obstacles_for_task,
+        list_recently_resolved_obstacles_for_task,
         list_sub_tasks_for_task,
     )
 
@@ -1315,6 +1426,21 @@ def generate_task_recommendation(
             "proposed_solutions": o.proposed_solutions or [],
         }
         for o in obstacle_rows
+    ]
+    resolved_obstacle_rows = list_recently_resolved_obstacles_for_task(db, task.id)
+    _now = datetime.now(UTC)
+    resolved_obstacle_dicts = [
+        {
+            "id": o.id,
+            "description": o.description,
+            "impact": o.impact,
+            "resolution_notes": o.resolution_notes,
+            "resolved_at_iso": o.resolved_at.isoformat() if o.resolved_at else None,
+            "resolved_ago_days": (
+                (_now - _as_utc(o.resolved_at)).days if o.resolved_at else None
+            ),
+        }
+        for o in resolved_obstacle_rows
     ]
 
     # Build a retrieval query from the task + recent update summaries so the
@@ -1356,6 +1482,7 @@ def generate_task_recommendation(
         mode=mode,
         subtasks=subtask_dicts,
         active_obstacles=obstacle_dicts,
+        resolved_obstacles=resolved_obstacle_dicts,
     )
 
     # ─── Cache: return last rec if fresh AND same input hash ───
@@ -1391,6 +1518,7 @@ def generate_task_recommendation(
         "subtasks_total": subtask_total,
         "subtasks_completed": subtask_completed,
         "active_obstacles": len(obstacle_dicts),
+        "resolved_obstacles": len(resolved_obstacle_dicts),
     }
 
     if is_blocked:
@@ -1402,6 +1530,7 @@ def generate_task_recommendation(
             history_summary=history_summary,
             subtasks=subtask_dicts,
             active_obstacles=obstacle_dicts,
+            resolved_obstacles=resolved_obstacle_dicts,
         )
         unblock_user = build_unblock_user_message(task=task_dict)
         unblock = provider.generate_unblock(
@@ -1453,6 +1582,7 @@ def generate_task_recommendation(
             history_summary=history_summary,
             subtasks=subtask_dicts,
             active_obstacles=obstacle_dicts,
+            resolved_obstacles=resolved_obstacle_dicts,
         )
         standard_user = build_standard_user_message(
             task=task_dict,

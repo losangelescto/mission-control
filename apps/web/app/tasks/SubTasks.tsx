@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { SubTask, SubTaskDraft } from "@/lib/api/types";
+import { pickSelectedDrafts, toggleIndex } from "@/lib/subtask-drafts";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -26,6 +27,9 @@ export function SubTasks({ taskId, initialSubTasks }: Props) {
   const [newDescription, setNewDescription] = useState("");
   const [newCanonRef, setNewCanonRef] = useState("");
   const [drafts, setDrafts] = useState<SubTaskDraft[] | null>(null);
+  const [deselectedDrafts, setDeselectedDrafts] = useState<Set<number>>(
+    () => new Set(),
+  );
   const [busy, setBusy] = useState<string | null>(null);
 
   const completed = subTasks.filter((s) => s.status === "completed").length;
@@ -97,6 +101,7 @@ export function SubTasks({ taskId, initialSubTasks }: Props) {
       if (res.ok) {
         const body = await res.json();
         setDrafts(body.drafts);
+        setDeselectedDrafts(new Set());
       }
     } finally {
       setBusy(null);
@@ -105,9 +110,15 @@ export function SubTasks({ taskId, initialSubTasks }: Props) {
 
   async function saveAllDrafts() {
     if (!drafts) return;
+    const toSave = pickSelectedDrafts(drafts, deselectedDrafts);
+    if (toSave.length === 0) {
+      setDrafts(null);
+      setDeselectedDrafts(new Set());
+      return;
+    }
     setBusy("save-all");
     try {
-      for (const d of drafts) {
+      for (const d of toSave) {
         const res = await fetch(`${API_BASE_URL}/tasks/${taskId}/subtasks`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -119,6 +130,7 @@ export function SubTasks({ taskId, initialSubTasks }: Props) {
         }
       }
       setDrafts(null);
+      setDeselectedDrafts(new Set());
       router.refresh();
     } finally {
       setBusy(null);
@@ -209,39 +221,71 @@ export function SubTasks({ taskId, initialSubTasks }: Props) {
           style={{ background: "var(--bg-base)", padding: "0.875rem" }}
         >
           <h3 style={{ marginBottom: "0.5rem" }}>
-            Generated preview ({drafts.length})
+            Generated preview ({drafts.length - deselectedDrafts.size} of {drafts.length} selected)
           </h3>
+          <p className="small" style={{ marginBottom: "0.5rem", color: "var(--text-tertiary)" }}>
+            Uncheck any draft you don&apos;t want before saving.
+          </p>
           <ul className="list">
-            {drafts.map((d, i) => (
-              <li key={`${d.title}-${i}`}>
-                <div style={{ fontWeight: 600, fontSize: "0.9375rem" }}>
-                  {d.title}
-                </div>
-                {d.description ? (
-                  <div className="small" style={{ marginTop: "0.25rem" }}>
-                    {d.description}
-                  </div>
-                ) : null}
-                {d.canon_reference ? (
-                  <span className="badge" style={{ marginTop: "0.25rem" }}>
-                    {d.canon_reference}
-                  </span>
-                ) : null}
-              </li>
-            ))}
+            {drafts.map((d, i) => {
+              const selected = !deselectedDrafts.has(i);
+              return (
+                <li key={`${d.title}-${i}`}>
+                  <label
+                    style={{
+                      display: "flex",
+                      gap: "0.5rem",
+                      alignItems: "flex-start",
+                      cursor: "pointer",
+                      opacity: selected ? 1 : 0.5,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() =>
+                        setDeselectedDrafts((prev) => toggleIndex(prev, i))
+                      }
+                      aria-label={`Include draft: ${d.title}`}
+                      style={{ width: "auto", height: "auto", marginTop: "0.25rem", flexShrink: 0 }}
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: "0.9375rem" }}>
+                        {d.title}
+                      </div>
+                      {d.description ? (
+                        <div className="small" style={{ marginTop: "0.25rem" }}>
+                          {d.description}
+                        </div>
+                      ) : null}
+                      {d.canon_reference ? (
+                        <span className="badge" style={{ marginTop: "0.25rem" }}>
+                          {d.canon_reference}
+                        </span>
+                      ) : null}
+                    </div>
+                  </label>
+                </li>
+              );
+            })}
           </ul>
           <div className="cta-row">
             <button
               type="button"
               className="link-btn"
               onClick={saveAllDrafts}
-              disabled={busy === "save-all"}
+              disabled={busy === "save-all" || drafts.length === deselectedDrafts.size}
             >
-              {busy === "save-all" ? "Saving..." : "Save All"}
+              {busy === "save-all"
+                ? "Saving..."
+                : `Save ${drafts.length - deselectedDrafts.size}`}
             </button>
             <button
               type="button"
-              onClick={() => setDrafts(null)}
+              onClick={() => {
+                setDrafts(null);
+                setDeselectedDrafts(new Set());
+              }}
               style={{
                 background: "transparent",
                 border: "1px solid var(--border-input)",

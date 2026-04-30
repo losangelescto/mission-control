@@ -431,37 +431,60 @@ def _search_canon(db: Session, q: str, limit: int) -> list[dict]:
     ]
 
 
+_COUNTS_SQL = """
+SELECT 'tasks' AS type, COUNT(*) AS n FROM tasks
+  WHERE search_vector @@ websearch_to_tsquery('english', :q)
+UNION ALL
+SELECT 'task_updates', COUNT(*) FROM task_updates
+  WHERE search_vector @@ websearch_to_tsquery('english', :q)
+UNION ALL
+SELECT 'sub_tasks', COUNT(*) FROM sub_tasks
+  WHERE search_vector @@ websearch_to_tsquery('english', :q)
+UNION ALL
+SELECT 'obstacles', COUNT(*) FROM obstacles
+  WHERE search_vector @@ websearch_to_tsquery('english', :q)
+UNION ALL
+SELECT 'reviews', COUNT(*) FROM review_sessions
+  WHERE search_vector @@ websearch_to_tsquery('english', :q)
+UNION ALL
+-- Sources facet folds document-level + chunk-level matches into a
+-- single per-document count. UNION (not UNION ALL) deduplicates the
+-- doc id when both the document and one of its chunks match.
+SELECT 'sources', COUNT(*) FROM (
+    SELECT id FROM source_documents
+      WHERE source_type <> 'canon_doc'
+        AND search_vector @@ websearch_to_tsquery('english', :q)
+    UNION
+    SELECT sc.source_document_id FROM source_chunks sc
+      JOIN source_documents sd ON sd.id = sc.source_document_id
+      WHERE sd.source_type <> 'canon_doc'
+        AND sc.search_vector @@ websearch_to_tsquery('english', :q)
+) AS sources_distinct
+UNION ALL
+-- Canon facet has the same fold so chunk-level matches inside a canon
+-- doc bump the count too.
+SELECT 'canon', COUNT(*) FROM (
+    SELECT id FROM source_documents
+      WHERE source_type = 'canon_doc'
+        AND search_vector @@ websearch_to_tsquery('english', :q)
+    UNION
+    SELECT sc.source_document_id FROM source_chunks sc
+      JOIN source_documents sd ON sd.id = sc.source_document_id
+      WHERE sd.source_type = 'canon_doc'
+        AND sc.search_vector @@ websearch_to_tsquery('english', :q)
+) AS canon_distinct
+"""
+
+
 def _count_by_type(db: Session, q: str) -> dict[str, int]:
-    """One-shot count per logical type so the UI can render facet counts."""
-    counts = db.execute(
-        text(
-            """
-            SELECT 'tasks' AS type, COUNT(*) AS n FROM tasks
-              WHERE search_vector @@ websearch_to_tsquery('english', :q)
-            UNION ALL
-            SELECT 'task_updates', COUNT(*) FROM task_updates
-              WHERE search_vector @@ websearch_to_tsquery('english', :q)
-            UNION ALL
-            SELECT 'sub_tasks', COUNT(*) FROM sub_tasks
-              WHERE search_vector @@ websearch_to_tsquery('english', :q)
-            UNION ALL
-            SELECT 'obstacles', COUNT(*) FROM obstacles
-              WHERE search_vector @@ websearch_to_tsquery('english', :q)
-            UNION ALL
-            SELECT 'sources', COUNT(*) FROM source_documents
-              WHERE source_type <> 'canon_doc'
-                AND search_vector @@ websearch_to_tsquery('english', :q)
-            UNION ALL
-            SELECT 'reviews', COUNT(*) FROM review_sessions
-              WHERE search_vector @@ websearch_to_tsquery('english', :q)
-            UNION ALL
-            SELECT 'canon', COUNT(*) FROM source_documents
-              WHERE source_type = 'canon_doc'
-                AND search_vector @@ websearch_to_tsquery('english', :q)
-            """
-        ),
-        {"q": q},
-    ).mappings().all()
+    """One-shot count per logical type so the UI can render facet counts.
+
+    The ``sources`` and ``canon`` buckets count distinct source documents
+    that match either at the document level or at any chunk level — so a
+    query whose only hits are deep inside the chunk text still bumps the
+    facet count. (See ``_COUNTS_SQL`` above.)
+    """
+    counts = db.execute(text(_COUNTS_SQL), {"q": q}).mappings().all()
     return {row["type"]: int(row["n"]) for row in counts}
 
 

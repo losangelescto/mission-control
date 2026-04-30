@@ -147,6 +147,56 @@ def test_default_limit_is_in_range() -> None:
     assert 1 <= DEFAULT_LIMIT <= MAX_LIMIT
 
 
+def test_sources_count_includes_chunks(monkeypatch) -> None:
+    """When the only match for a query lives in a chunk, the facet count
+    for ``sources`` must still reflect that hit. (Regression for the
+    sidebar "Sources (0)" bug.)"""
+    chunk_hit = {
+        "id": 7,
+        "type": "source_chunk",
+        "title": "vendor.pdf",
+        "snippet": "<mark>roof</mark> section needs attention",
+        "relevance": 1.2,
+        "url": "/sources?source_id=7",
+        "metadata": {"source_type": "thread_export", "chunk_index": 0},
+    }
+
+    def fake_runners(_filter):
+        return [_stub_runner([chunk_hit])]
+
+    def fake_count_by_type(_db, _q):
+        # Mirrors the new SQL contract: a chunk-only match increments
+        # the per-document "sources" facet via the UNION fold.
+        return {
+            "tasks": 0, "task_updates": 0, "sub_tasks": 0, "obstacles": 0,
+            "sources": 1, "reviews": 0, "canon": 0,
+        }
+
+    monkeypatch.setattr(search_module, "_runners_for_filter", fake_runners)
+    monkeypatch.setattr(search_module, "_count_by_type", fake_count_by_type)
+
+    out = search(None, query="roof", type_filter="all")
+    assert out["type_counts"]["sources"] == 1
+    assert any(r["type"] == "source_chunk" for r in out["results"])
+
+
+def test_counts_sql_folds_chunks_into_sources_and_canon() -> None:
+    """The SQL constant must reference both source_documents and
+    source_chunks for both the sources and canon facet counts. This
+    locks in the fix at the SQL string level."""
+    from app.services.search import _COUNTS_SQL
+
+    sql = _COUNTS_SQL
+    # The "sources" facet should be one of the two SQL chunks containing
+    # both source_documents and source_chunks. Same for "canon".
+    sources_block = sql.split("'sources'")[1].split("UNION ALL")[0]
+    canon_block = sql.split("'canon'")[1]
+    assert "source_documents" in sources_block
+    assert "source_chunks" in sources_block
+    assert "source_documents" in canon_block
+    assert "source_chunks" in canon_block
+
+
 def test_search_route_invokes_orchestrator(monkeypatch) -> None:
     """Smoke-test the route shim itself via TestClient + dependency override."""
     from collections.abc import Generator

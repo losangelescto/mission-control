@@ -2,8 +2,10 @@ import { apiClient } from "@/lib/api/client";
 import { parsePositiveIntParam } from "@/lib/search-params";
 import Link from "next/link";
 
+import DeleteSourceButton from "./DeleteSourceButton";
 import SourceStatus from "./SourceStatus";
 import TranscriptView from "./TranscriptView";
+import UploadSource from "./UploadSource";
 
 type SourcesPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -52,7 +54,10 @@ export default async function SourcesPage({ searchParams }: SourcesPageProps) {
   return (
     <section className="stack">
       <div className="panel">
-        <h1>Sources</h1>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "1rem" }}>
+          <h1>Sources</h1>
+          <UploadSource />
+        </div>
         <form action="/search" method="get" className="stack-sm" style={{ marginTop: "0.5rem" }}>
           <input
             type="search"
@@ -120,6 +125,13 @@ export default async function SourcesPage({ searchParams }: SourcesPageProps) {
                 <summary>Extracted Text</summary>
                 <pre className="small mono">{selectedSource.extracted_text.slice(0, 3000)}</pre>
               </details>
+              <div style={{ marginTop: "0.5rem" }}>
+                <DeleteSourceButton
+                  sourceId={selectedSource.id}
+                  sourceLabel={displayName(selectedSource.filename)}
+                  isActiveCanon={selectedSource.is_active_canon_version}
+                />
+              </div>
             </div>
           ) : (
             <p className="small">No source selected.</p>

@@ -10,6 +10,7 @@ import { DismissCandidate } from "./DismissCandidate";
 import { SubTasks } from "./SubTasks";
 import { Obstacles } from "./Obstacles";
 import ActivityLog from "./ActivityLog";
+import DeleteTaskButton from "./DeleteTaskButton";
 
 type TasksPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -80,9 +81,21 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
       : [];
   const blockedSet = new Set(daily?.blocked.map((item) => item.task_id) ?? []);
 
+  // Default behaviour: show whatever recommendation already exists for this
+  // task — no LLM call on mount. Only when the user explicitly clicks
+  // "Generate Recommendation" (which sets ?generate_recommendation=1) do we
+  // POST a new one.
   let recommendation: Awaited<ReturnType<typeof apiClient.generateRecommendation>> | null = null;
-  if (selectedTask && firstSearchParam(params.generate_recommendation) === "1") {
-    recommendation = await apiClient.generateRecommendation(selectedTask.id).catch(() => null);
+  if (selectedTask) {
+    if (firstSearchParam(params.generate_recommendation) === "1") {
+      recommendation = await apiClient
+        .generateRecommendation(selectedTask.id)
+        .catch(() => null);
+    } else {
+      recommendation = await apiClient
+        .getLatestRecommendation(selectedTask.id)
+        .catch(() => null);
+    }
   }
 
   const recommendationHistory = selectedTask
@@ -121,7 +134,12 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
   return (
     <section className="stack">
       <div className="panel">
-        <h1>Tasks</h1>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "1rem" }}>
+          <h1>Tasks</h1>
+          <Link href="/tasks/new" className="badge" style={{ padding: "0.4rem 0.75rem" }}>
+            + New Task
+          </Link>
+        </div>
         <form action="/search" method="get" className="stack-sm" style={{ marginTop: "0.5rem" }}>
           <input
             type="search"
@@ -229,6 +247,13 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
       {selectedTask ? (
         <article className="panel">
           <ActivityLog events={auditEvents} />
+        </article>
+      ) : null}
+
+      {selectedTask ? (
+        <article className="panel">
+          <h3>Danger zone</h3>
+          <DeleteTaskButton taskId={selectedTask.id} taskTitle={selectedTask.title} />
         </article>
       ) : null}
 

@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import select, text
+from sqlalchemy import delete, or_, select, text, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -78,6 +78,94 @@ def update_task(db: Session, task: Task, updates: dict) -> Task:
     db.add(task)
     db.flush()
     return task
+
+
+def delete_task(db: Session, task_id: int) -> bool:
+    """Delete a task and every row that references it.
+
+    Nullable references (TaskCandidate.related_task_id, ReviewSession.task_id,
+    RecurrenceOccurrence.task_id) are detached rather than removed so the
+    user-facing rows survive (a candidate belongs to its source; a review
+    can outlive the task it was about; a recurrence template can re-spawn).
+
+    Past audit_events are intentionally preserved — they are the historical
+    record of what happened to the task. The new ``deleted`` audit event
+    is emitted by the service layer.
+    """
+    task = db.get(Task, task_id)
+    if task is None:
+        return False
+
+    db.execute(
+        update(TaskCandidate)
+        .where(TaskCandidate.related_task_id == task_id)
+        .values(related_task_id=None)
+    )
+    db.execute(
+        update(ReviewSession)
+        .where(ReviewSession.task_id == task_id)
+        .values(task_id=None)
+    )
+    db.execute(
+        update(RecurrenceOccurrence)
+        .where(RecurrenceOccurrence.task_id == task_id)
+        .values(task_id=None)
+    )
+
+    db.execute(delete(SubTask).where(SubTask.parent_task_id == task_id))
+    db.execute(delete(Obstacle).where(Obstacle.task_id == task_id))
+    db.execute(delete(Blocker).where(Blocker.task_id == task_id))
+    db.execute(delete(Delegation).where(Delegation.task_id == task_id))
+    db.execute(delete(Recommendation).where(Recommendation.task_id == task_id))
+    db.execute(delete(TaskUpdate).where(TaskUpdate.task_id == task_id))
+
+    db.delete(task)
+    db.flush()
+    return True
+
+
+def delete_source(db: Session, source_id: int) -> bool:
+    """Delete a source and every row that references it.
+
+    Active-canon protection lives in the service layer, not here — this
+    repo helper assumes the caller has already validated.
+
+    MailboxMessage.source_document_id is nullable (a deleted source
+    leaves the message; we just clear the link).
+    """
+    source = db.get(SourceDocument, source_id)
+    if source is None:
+        return False
+
+    from app.models import MailboxMessage  # avoid top-level cycle in some tests
+
+    db.execute(
+        update(MailboxMessage)
+        .where(MailboxMessage.source_document_id == source_id)
+        .values(source_document_id=None)
+    )
+
+    db.execute(
+        delete(SourceChunk).where(SourceChunk.source_document_id == source_id)
+    )
+    db.execute(
+        delete(TaskCandidate).where(TaskCandidate.source_document_id == source_id)
+    )
+    db.execute(
+        delete(CallArtifact).where(CallArtifact.source_document_id == source_id)
+    )
+    db.execute(
+        delete(CanonChangeEvent).where(
+            or_(
+                CanonChangeEvent.previous_source_id == source_id,
+                CanonChangeEvent.new_source_id == source_id,
+            )
+        )
+    )
+
+    db.delete(source)
+    db.flush()
+    return True
 
 
 # Map legacy event_type strings to the Day-4 canonical action vocabulary
@@ -232,6 +320,11 @@ def list_audit_events_for_task(
             select(Obstacle.id).where(Obstacle.task_id == task_id)
         ).all()
     )
+    task_update_ids = list(
+        db.scalars(
+            select(TaskUpdate.id).where(TaskUpdate.task_id == task_id)
+        ).all()
+    )
 
     conditions = [
         (AuditEvent.entity_type == "task") & (AuditEvent.entity_id == str(task_id)),
@@ -245,6 +338,11 @@ def list_audit_events_for_task(
         conditions.append(
             (AuditEvent.entity_type == "obstacle")
             & (AuditEvent.entity_id.in_([str(i) for i in obstacle_ids]))
+        )
+    if task_update_ids:
+        conditions.append(
+            (AuditEvent.entity_type == "task_update")
+            & (AuditEvent.entity_id.in_([str(i) for i in task_update_ids]))
         )
 
     from sqlalchemy import or_
@@ -314,8 +412,20 @@ def deactivate_canon_versions(db: Session, canonical_doc_id: str) -> None:
         db.add(doc)
 
 
-def get_active_canon_for_doc_id(db: Session, canonical_doc_id: str) -> SourceDocument | None:
-    """Return the currently-active source for a canonical_doc_id, if any."""
+def get_active_canon_for_doc_id(
+    db: Session,
+    canonical_doc_id: str,
+    *,
+    exclude_source_id: int | None = None,
+) -> SourceDocument | None:
+    """Return the currently-active source for a canonical_doc_id, if any.
+
+    ``exclude_source_id`` lets the activation hook ask for "the prior
+    active version, not the one I'm about to activate" — essential when
+    a new version was uploaded with ``is_active_canon_version=true``
+    already set, in which case the bare query would return the new
+    source itself.
+    """
     stmt = (
         select(SourceDocument)
         .where(SourceDocument.source_type == "canon_doc")
@@ -323,6 +433,8 @@ def get_active_canon_for_doc_id(db: Session, canonical_doc_id: str) -> SourceDoc
         .where(SourceDocument.is_active_canon_version.is_(True))
         .order_by(SourceDocument.id.desc())
     )
+    if exclude_source_id is not None:
+        stmt = stmt.where(SourceDocument.id != exclude_source_id)
     return db.scalars(stmt).first()
 
 
@@ -620,6 +732,34 @@ def list_active_obstacles_for_task(db: Session, task_id: int) -> list[Obstacle]:
         .where(Obstacle.task_id == task_id)
         .where(Obstacle.status == "active")
         .order_by(Obstacle.identified_at.desc(), Obstacle.id.desc())
+    )
+    return list(db.scalars(stmt).all())
+
+
+def list_recently_resolved_obstacles_for_task(
+    db: Session,
+    task_id: int,
+    *,
+    within_days: int = 14,
+    limit: int = 3,
+) -> list[Obstacle]:
+    """Resolved obstacles whose `resolved_at` falls within the recent window.
+
+    Newest first. Used to inject resolution context into recommendation
+    prompts so the LLM can build on what just got unstuck rather than
+    re-suggesting the same path.
+    """
+    from datetime import timedelta
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=within_days)
+    stmt = (
+        select(Obstacle)
+        .where(Obstacle.task_id == task_id)
+        .where(Obstacle.status == "resolved")
+        .where(Obstacle.resolved_at.is_not(None))
+        .where(Obstacle.resolved_at >= cutoff)
+        .order_by(Obstacle.resolved_at.desc(), Obstacle.id.desc())
+        .limit(limit)
     )
     return list(db.scalars(stmt).all())
 

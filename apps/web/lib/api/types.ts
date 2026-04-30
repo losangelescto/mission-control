@@ -319,6 +319,24 @@ export type RecommendationHistoryItem = {
   next_action: string;
 };
 
+export type AuditEvent = {
+  id: number;
+  entity_type: string;
+  entity_id: string;
+  action: string;
+  actor: string;
+  changes: Record<string, unknown> | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+};
+
+export type AuditListResponse = {
+  events: AuditEvent[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
 export type SearchResultType =
   | "task"
   | "task_update"

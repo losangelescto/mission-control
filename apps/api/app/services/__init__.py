@@ -181,6 +181,7 @@ def update_task(db: Session, task_id: int, updates: dict) -> Task | None:
     if task is None:
         return None
 
+    before_status = task.status
     updated = repo_update_task(db, task, updates)
     create_audit_event(
         db=db,
@@ -189,6 +190,18 @@ def update_task(db: Session, task_id: int, updates: dict) -> Task | None:
         event_type="task_updated",
         payload_json=_task_audit_payload(updated),
     )
+    # Emit a distinct status_changed event when status moves — easier to
+    # filter for in the audit UI than scanning every "updated" diff.
+    if "status" in updates and before_status != updated.status:
+        from app.services.audit import log_event
+
+        log_event(
+            db,
+            entity_type="task",
+            entity_id=updated.id,
+            action="status_changed",
+            changes={"status": {"old": before_status, "new": updated.status}},
+        )
     db.commit()
     db.refresh(updated)
     return updated
@@ -410,6 +423,19 @@ def ingest_source_upload(
             "processing_status": "queued",
         },
     )
+    from app.services.audit import log_event
+
+    log_event(
+        db,
+        entity_type="source",
+        entity_id=source_document.id,
+        action="uploaded",
+        metadata={
+            "source_type": source_type,
+            "filename": filename,
+            "is_canon_active": bool(is_active_canon_version),
+        },
+    )
     db.commit()
     db.refresh(source_document)
     return source_document
@@ -461,9 +487,10 @@ def activate_canon_source(db: Session, source_id: int) -> SourceDocument | None:
 
     # Detect+persist a CanonChangeEvent before commit so the activation
     # and the change record land atomically.
+    change_event = None
     if previous_active is not None and previous_active.id != source_document.id:
         try:
-            detect_canon_change(
+            change_event = detect_canon_change(
                 db,
                 new_source=source_document,
                 previous_source=previous_active,
@@ -473,6 +500,31 @@ def activate_canon_source(db: Session, source_id: int) -> SourceDocument | None:
                 "canon change detection failed; activation continues",
                 extra={"context": {"source_id": source_document.id}},
             )
+
+    from app.services.audit import log_event
+
+    log_event(
+        db,
+        entity_type="source",
+        entity_id=source_document.id,
+        action="canon_activated",
+        metadata={
+            "canonical_doc_id": source_document.canonical_doc_id,
+            "version_label": source_document.version_label,
+            "previous_source_id": previous_active.id if previous_active else None,
+        },
+    )
+    if change_event is not None:
+        log_event(
+            db,
+            entity_type="canon_change",
+            entity_id=change_event.id,
+            action="canon_change_detected",
+            metadata={
+                "canon_doc_id": change_event.canon_doc_id,
+                "affected_task_count": len(change_event.affected_task_ids or []),
+            },
+        )
 
     db.commit()
     db.refresh(source_document)
@@ -1714,6 +1766,7 @@ def create_sub_task_for_task(db: Session, task_id: int, payload: dict) -> SubTas
     if task is None:
         return None
     from app.repositories import create_sub_task, next_sub_task_order
+    from app.services.audit import log_event
 
     ordering = payload.get("order")
     if ordering is None:
@@ -1728,6 +1781,13 @@ def create_sub_task_for_task(db: Session, task_id: int, payload: dict) -> SubTas
             "order": ordering,
             "canon_reference": payload.get("canon_reference", "") or "",
         },
+    )
+    log_event(
+        db,
+        entity_type="sub_task",
+        entity_id=row.id,
+        action="created",
+        metadata={"parent_task_id": task_id, "title": row.title},
     )
     db.commit()
     db.refresh(row)
@@ -1745,12 +1805,40 @@ def list_sub_tasks(db: Session, task_id: int) -> list[SubTask] | None:
 
 def update_sub_task_by_id(db: Session, sub_task_id: int, updates: dict) -> SubTask | None:
     from app.repositories import get_sub_task_by_id, update_sub_task
+    from app.services.audit import diff_fields, log_event
 
     sub_task = get_sub_task_by_id(db, sub_task_id)
     if sub_task is None:
         return None
     scrubbed = {k: v for k, v in updates.items() if v is not None}
+    before = {
+        "title": sub_task.title,
+        "description": sub_task.description,
+        "status": sub_task.status,
+        "order": sub_task.order,
+        "canon_reference": sub_task.canon_reference,
+    }
     update_sub_task(db, sub_task, scrubbed)
+    after = {
+        "title": sub_task.title,
+        "description": sub_task.description,
+        "status": sub_task.status,
+        "order": sub_task.order,
+        "canon_reference": sub_task.canon_reference,
+    }
+    changes = diff_fields(before, after, list(after.keys()))
+    if changes:
+        becomes_completed = (
+            before["status"] != "completed" and after["status"] == "completed"
+        )
+        log_event(
+            db,
+            entity_type="sub_task",
+            entity_id=sub_task.id,
+            action="completed" if becomes_completed else "updated",
+            changes=changes,
+            metadata={"parent_task_id": sub_task.parent_task_id},
+        )
     db.commit()
     db.refresh(sub_task)
     return sub_task
@@ -1758,10 +1846,20 @@ def update_sub_task_by_id(db: Session, sub_task_id: int, updates: dict) -> SubTa
 
 def delete_sub_task_by_id(db: Session, sub_task_id: int) -> bool:
     from app.repositories import delete_sub_task, get_sub_task_by_id
+    from app.services.audit import log_event
 
     sub_task = get_sub_task_by_id(db, sub_task_id)
     if sub_task is None:
         return False
+    parent_task_id = sub_task.parent_task_id
+    title = sub_task.title
+    log_event(
+        db,
+        entity_type="sub_task",
+        entity_id=sub_task_id,
+        action="deleted",
+        metadata={"parent_task_id": parent_task_id, "title": title},
+    )
     delete_sub_task(db, sub_task)
     db.commit()
     return True
@@ -1815,6 +1913,7 @@ def generate_sub_tasks_preview(
 
 def create_obstacle_for_task(db: Session, task_id: int, payload: dict) -> Obstacle | None:
     from app.repositories import create_obstacle
+    from app.services.audit import log_event
 
     task = get_task_by_id(db, task_id)
     if task is None:
@@ -1836,6 +1935,14 @@ def create_obstacle_for_task(db: Session, task_id: int, payload: dict) -> Obstac
             "resolution_notes": "",
             "identified_by": payload.get("identified_by", "user") or "user",
         },
+    )
+    log_event(
+        db,
+        entity_type="obstacle",
+        entity_id=row.id,
+        action="created",
+        actor=row.identified_by or "system",
+        metadata={"task_id": task_id, "description_preview": (row.description or "")[:120]},
     )
     db.commit()
     db.refresh(row)
@@ -1868,6 +1975,7 @@ def resolve_obstacle_by_id(
     db: Session, obstacle_id: int, resolution_notes: str
 ) -> Obstacle | None:
     from app.repositories import get_obstacle_by_id, update_obstacle
+    from app.services.audit import log_event
 
     obstacle = get_obstacle_by_id(db, obstacle_id)
     if obstacle is None:
@@ -1879,6 +1987,17 @@ def resolve_obstacle_by_id(
             "status": "resolved",
             "resolution_notes": resolution_notes,
             "resolved_at": datetime.now(UTC),
+        },
+    )
+    log_event(
+        db,
+        entity_type="obstacle",
+        entity_id=obstacle.id,
+        action="resolved",
+        changes={"status": {"old": "active", "new": "resolved"}},
+        metadata={
+            "task_id": obstacle.task_id,
+            "resolution_notes_preview": (resolution_notes or "")[:160],
         },
     )
     db.commit()
@@ -1947,6 +2066,18 @@ def analyze_obstacle_by_id(
     ]
 
     update_obstacle(db, obstacle, {"proposed_solutions": solutions})
+    from app.services.audit import log_event
+
+    log_event(
+        db,
+        entity_type="obstacle",
+        entity_id=obstacle.id,
+        action="analyzed",
+        metadata={
+            "task_id": obstacle.task_id,
+            "solution_count": len(solutions),
+        },
+    )
     db.commit()
     db.refresh(obstacle)
     return obstacle

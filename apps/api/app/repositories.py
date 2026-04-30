@@ -80,14 +80,48 @@ def update_task(db: Session, task: Task, updates: dict) -> Task:
     return task
 
 
+# Map legacy event_type strings to the Day-4 canonical action vocabulary
+# (single verbs, no entity prefix). The entity_type column already
+# carries the entity, so the action column doesn't need to repeat it.
+_LEGACY_EVENT_TYPE_TO_ACTION = {
+    "task_created": "created",
+    "task_updated": "updated",
+    "task_blocked": "blocked",
+    "task_unblocked": "unblocked",
+    "task_delegated": "assigned",
+    "recurrence_spawned": "recurrence_spawned",
+}
+
+
 def create_audit_event(
-    db: Session, entity_type: str, entity_id: str, event_type: str, payload_json: dict
+    db: Session,
+    entity_type: str,
+    entity_id: str,
+    event_type: str,
+    payload_json: dict,
+    *,
+    actor: str = "system",
+    action: str | None = None,
+    changes: dict | None = None,
+    event_metadata: dict | None = None,
 ) -> AuditEvent:
+    """Persist an audit row.
+
+    Legacy positional callers (e.g. ``task_created``) still work — the
+    canonical ``action`` is derived from ``event_type`` via the legacy
+    map. New callers can pass ``action`` explicitly and fill in
+    ``actor``, ``changes``, ``event_metadata``.
+    """
+    canonical_action = action or _LEGACY_EVENT_TYPE_TO_ACTION.get(event_type, event_type)
     event = AuditEvent(
         entity_type=entity_type,
         entity_id=entity_id,
         event_type=event_type,
         payload_json=payload_json,
+        action=canonical_action,
+        actor=actor,
+        changes=changes if changes is not None else payload_json,
+        event_metadata=event_metadata,
     )
     db.add(event)
     db.flush()
@@ -152,6 +186,76 @@ def create_recurrence_occurrence(db: Session, payload: dict) -> RecurrenceOccurr
     db.add(occurrence)
     db.flush()
     return occurrence
+
+
+def query_audit_events(
+    db: Session,
+    *,
+    entity_type: str | None = None,
+    entity_id: str | None = None,
+    action: str | None = None,
+    actor: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[AuditEvent]:
+    stmt = select(AuditEvent)
+    if entity_type:
+        stmt = stmt.where(AuditEvent.entity_type == entity_type)
+    if entity_id is not None:
+        stmt = stmt.where(AuditEvent.entity_id == str(entity_id))
+    if action:
+        stmt = stmt.where(AuditEvent.action == action)
+    if actor:
+        stmt = stmt.where(AuditEvent.actor == actor)
+    stmt = stmt.order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc())
+    stmt = stmt.limit(limit).offset(offset)
+    return list(db.scalars(stmt).all())
+
+
+def list_audit_events_for_task(
+    db: Session, *, task_id: int, limit: int = 200
+) -> list[AuditEvent]:
+    """Audit history for a task plus its sub-tasks and obstacles.
+
+    The frontend Activity Log on the task detail panel uses this. We
+    union by entity_type+entity_id rather than join because the sub-task
+    and obstacle ids don't appear on the task row directly — we look
+    them up first and pass their ids as additional filters.
+    """
+    sub_task_ids = list(
+        db.scalars(
+            select(SubTask.id).where(SubTask.parent_task_id == task_id)
+        ).all()
+    )
+    obstacle_ids = list(
+        db.scalars(
+            select(Obstacle.id).where(Obstacle.task_id == task_id)
+        ).all()
+    )
+
+    conditions = [
+        (AuditEvent.entity_type == "task") & (AuditEvent.entity_id == str(task_id)),
+    ]
+    if sub_task_ids:
+        conditions.append(
+            (AuditEvent.entity_type == "sub_task")
+            & (AuditEvent.entity_id.in_([str(i) for i in sub_task_ids]))
+        )
+    if obstacle_ids:
+        conditions.append(
+            (AuditEvent.entity_type == "obstacle")
+            & (AuditEvent.entity_id.in_([str(i) for i in obstacle_ids]))
+        )
+
+    from sqlalchemy import or_
+
+    stmt = (
+        select(AuditEvent)
+        .where(or_(*conditions))
+        .order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc())
+        .limit(limit)
+    )
+    return list(db.scalars(stmt).all())
 
 
 def create_source_document(db: Session, payload: dict) -> SourceDocument:

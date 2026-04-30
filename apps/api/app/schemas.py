@@ -659,6 +659,26 @@ class ObstacleResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class AuditEventResponse(BaseModel):
+    id: int
+    entity_type: str
+    entity_id: str
+    action: str
+    actor: str
+    changes: dict | None = None
+    metadata: dict | None = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AuditListResponse(BaseModel):
+    events: list[AuditEventResponse]
+    total: int
+    limit: int
+    offset: int
+
+
 SearchResultType = Literal[
     "task", "task_update", "sub_task", "obstacle",
     "source", "source_chunk", "review", "canon",

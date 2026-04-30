@@ -107,12 +107,15 @@ def test_task_crud_and_filters() -> None:
 
     with TestingSessionLocal() as db:
         events = list(db.scalars(select(AuditEvent).order_by(AuditEvent.id.asc())).all())
-        assert len(events) == 3
+        # 2 creates + 1 update + 1 status_changed (the PATCH flips status)
+        assert len(events) == 4
         assert events[0].event_type == "task_created"
         assert events[1].event_type == "task_created"
         assert events[2].event_type == "task_updated"
         assert events[2].entity_type == "task"
         assert events[2].entity_id == "1"
+        assert events[3].action == "status_changed"
+        assert events[3].changes == {"status": {"old": "backlog", "new": "in_progress"}}
 
     app.dependency_overrides.clear()
 

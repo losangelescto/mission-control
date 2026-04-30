@@ -9,6 +9,7 @@ import { ApproveCandidate } from "./ApproveCandidate";
 import { DismissCandidate } from "./DismissCandidate";
 import { SubTasks } from "./SubTasks";
 import { Obstacles } from "./Obstacles";
+import ActivityLog from "./ActivityLog";
 
 type TasksPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -93,6 +94,13 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
     : [];
   const obstacles = selectedTask
     ? await apiClient.listObstacles(selectedTask.id).catch(() => [])
+    : [];
+
+  const auditEvents = selectedTask
+    ? await apiClient
+        .getTaskAuditLog(selectedTask.id)
+        .then((r) => r.events)
+        .catch(() => [])
     : [];
 
   const candidates = await apiClient.getTaskCandidates("pending_review").catch(() => []);
@@ -215,6 +223,12 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
       {selectedTask ? (
         <article className="panel">
           <Obstacles taskId={selectedTask.id} initialObstacles={obstacles} />
+        </article>
+      ) : null}
+
+      {selectedTask ? (
+        <article className="panel">
+          <ActivityLog events={auditEvents} />
         </article>
       ) : null}
 

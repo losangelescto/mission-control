@@ -371,6 +371,15 @@ class AuditEvent(Base):
     entity_id: Mapped[str] = mapped_column(String(255), nullable=False)
     event_type: Mapped[str] = mapped_column(String(100), nullable=False)
     payload_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    # New (Day 4) columns. ``event_metadata`` shadows nothing; we expose it
+    # to the API as ``metadata`` via Pydantic alias because SQLAlchemy's
+    # DeclarativeBase reserves ``metadata`` for the schema descriptor.
+    action: Mapped[str] = mapped_column(String(100), nullable=False, server_default="")
+    actor: Mapped[str] = mapped_column(
+        String(255), nullable=False, server_default="system"
+    )
+    changes: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    event_metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

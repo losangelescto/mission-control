@@ -1,4 +1,5 @@
 import {
+  AuditListResponse,
   CadenceStatus,
   CanonChangeEventDetail,
   CanonChangeEventSummary,
@@ -252,6 +253,28 @@ export const apiClient = {
       method: "POST",
       body: JSON.stringify({ resolution_notes: resolutionNotes }),
     });
+  },
+
+  async getTaskAuditLog(taskId: number, limit = 200): Promise<AuditListResponse> {
+    return apiFetch<AuditListResponse>(`/audit/task/${taskId}?limit=${limit}`);
+  },
+
+  async getAuditEvents(params: {
+    entity_type?: string;
+    entity_id?: number;
+    action?: string;
+    actor?: string;
+    limit?: number;
+    offset?: number;
+  } = {}): Promise<AuditListResponse> {
+    const q = new URLSearchParams();
+    if (params.entity_type) q.set("entity_type", params.entity_type);
+    if (params.entity_id !== undefined) q.set("entity_id", String(params.entity_id));
+    if (params.action) q.set("action", params.action);
+    if (params.actor) q.set("actor", params.actor);
+    if (params.limit !== undefined) q.set("limit", String(params.limit));
+    if (params.offset !== undefined) q.set("offset", String(params.offset));
+    return apiFetch<AuditListResponse>(`/audit?${q.toString()}`);
   },
 
   async search(

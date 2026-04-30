@@ -92,6 +92,8 @@ from app.schemas import (
     ObstacleCreate,
     ObstacleResolveRequest,
     ObstacleResponse,
+    AuditEventResponse,
+    AuditListResponse,
     ObstacleUpdate,
     SearchResponse,
     SearchResult,
@@ -919,8 +921,22 @@ def extract_call_actions_route(
 
 @router.post("/reviews", response_model=ReviewSessionResponse, status_code=status.HTTP_201_CREATED)
 def create_review_route(payload: ReviewSessionCreate, db: Session = Depends(get_db)) -> ReviewSessionResponse:
+    from app.services.audit import log_event
+
     data = payload.model_dump()
     session = repo_create_review_session(db, data)
+    log_event(
+        db,
+        entity_type="review",
+        entity_id=session.id,
+        action="created",
+        actor=session.reviewer or "system",
+        metadata={
+            "task_id": session.task_id,
+            "owner_name": session.owner_name,
+            "cadence_type": session.cadence_type,
+        },
+    )
     db.commit()
     db.refresh(session)
     return ReviewSessionResponse.model_validate(session)
@@ -1108,6 +1124,67 @@ def resolve_obstacle_route(
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="obstacle not found")
     return ObstacleResponse.model_validate(row)
+
+
+@router.get("/audit", response_model=AuditListResponse)
+def list_audit_events_route(
+    entity_type: str | None = Query(default=None),
+    entity_id: int | None = Query(default=None),
+    action: str | None = Query(default=None),
+    actor: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+) -> AuditListResponse:
+    from app.repositories import query_audit_events
+
+    rows = query_audit_events(
+        db,
+        entity_type=entity_type,
+        entity_id=str(entity_id) if entity_id is not None else None,
+        action=action,
+        actor=actor,
+        limit=limit,
+        offset=offset,
+    )
+    events = [
+        AuditEventResponse(
+            id=r.id,
+            entity_type=r.entity_type,
+            entity_id=r.entity_id,
+            action=r.action or r.event_type,
+            actor=r.actor or "system",
+            changes=r.changes,
+            metadata=r.event_metadata,
+            created_at=r.created_at,
+        )
+        for r in rows
+    ]
+    return AuditListResponse(events=events, total=len(events), limit=limit, offset=offset)
+
+
+@router.get("/audit/task/{task_id}", response_model=AuditListResponse)
+def task_audit_route(
+    task_id: int, limit: int = Query(default=200, ge=1, le=500), db: Session = Depends(get_db)
+) -> AuditListResponse:
+    """Activity log for a task plus its sub-tasks and obstacles."""
+    from app.repositories import list_audit_events_for_task
+
+    rows = list_audit_events_for_task(db, task_id=task_id, limit=limit)
+    events = [
+        AuditEventResponse(
+            id=r.id,
+            entity_type=r.entity_type,
+            entity_id=r.entity_id,
+            action=r.action or r.event_type,
+            actor=r.actor or "system",
+            changes=r.changes,
+            metadata=r.event_metadata,
+            created_at=r.created_at,
+        )
+        for r in rows
+    ]
+    return AuditListResponse(events=events, total=len(events), limit=limit, offset=0)
 
 
 @router.get("/search", response_model=SearchResponse)

@@ -89,8 +89,33 @@ def process_source(db: Session, source_id: int) -> SourceDocument | None:
         _mark_failed(db, source, f"unhandled error: {exc}")
 
     db.refresh(source)
+    _emit_processing_audit(db, source)
     _maybe_auto_extract(db, source)
     return source
+
+
+def _emit_processing_audit(db: Session, source: SourceDocument) -> None:
+    """Record one audit event reflecting the terminal processing state."""
+    from app.services.audit import log_event
+
+    status = source.processing_status
+    if status not in ("complete", "partial", "failed"):
+        return
+    action = "source_failed" if status == "failed" else "source_processed"
+    log_event(
+        db,
+        entity_type="source",
+        entity_id=source.id,
+        action=action,
+        metadata={
+            "source_type": source.source_type,
+            "processing_status": status,
+            "pages_total": source.pages_total,
+            "pages_processed": source.pages_processed,
+            "error": (source.processing_error or "")[:200] if status == "failed" else None,
+        },
+    )
+    db.commit()
 
 
 # ─── PDF ─────────────────────────────────────────────────────────────

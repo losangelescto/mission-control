@@ -352,6 +352,11 @@ class RecommendationContextMeta(BaseModel):
     subtasks_total: int = 0
     subtasks_completed: int = 0
     active_obstacles: int = 0
+    # Number of recently-resolved obstacles whose description, impact, and
+    # resolution_notes were injected into the recommendation prompt. Lets
+    # the UI show "the LLM saw your resolution" and lets tests verify the
+    # plumbing without parsing the prompt body.
+    resolved_obstacles_included: int = 0
 
 
 class RecommendationResponse(BaseModel):

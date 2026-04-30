@@ -331,3 +331,48 @@ def test_resolved_obstacle_resolution_notes_flow_into_prompt_and_bust_cache() ->
 
     db.close()
     app.dependency_overrides.clear()
+
+
+def test_recommendation_api_response_includes_resolved_obstacles_count() -> None:
+    """The API consumer must be able to see resolved_obstacles_included in
+    recommendation_context. The Pydantic response model used to drop the
+    field even though the service layer set it — regression pin.
+    """
+    from app.services import resolve_obstacle_by_id
+
+    TestingSessionLocal = _build_test_db()
+    _override_db(TestingSessionLocal)
+    client = TestClient(app)
+    task_id = _create_task(client)
+
+    obstacle_resp = client.post(
+        f"/tasks/{task_id}/obstacles",
+        json={
+            "description": "Camera footage missing for week 1",
+            "impact": "Cannot identify perpetrator",
+        },
+    )
+    assert obstacle_resp.status_code in (200, 201), obstacle_resp.text
+    obstacle_id = obstacle_resp.json()["id"]
+
+    db = TestingSessionLocal()
+    resolved = resolve_obstacle_by_id(
+        db,
+        obstacle_id,
+        "Recovered footage from cloud backup via vendor support team",
+    )
+    assert resolved is not None
+    db.close()
+
+    rec = client.post(f"/tasks/{task_id}/recommendation")
+    assert rec.status_code == 200, rec.text
+    body = rec.json()
+    ctx = body["recommendation_context"]
+    assert "resolved_obstacles_included" in ctx, (
+        f"recommendation_context missing the field; got keys: {list(ctx.keys())}"
+    )
+    assert ctx["resolved_obstacles_included"] >= 1, (
+        f"expected at least 1 resolved obstacle in prompt, got {ctx['resolved_obstacles_included']}"
+    )
+
+    app.dependency_overrides.clear()

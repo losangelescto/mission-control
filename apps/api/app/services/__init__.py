@@ -1528,7 +1528,7 @@ def generate_task_recommendation(
         "subtasks_total": subtask_total,
         "subtasks_completed": subtask_completed,
         "active_obstacles": len(obstacle_dicts),
-        "resolved_obstacles": len(resolved_obstacle_dicts),
+        "resolved_obstacles_included": len(resolved_obstacle_dicts),
     }
 
     if is_blocked:

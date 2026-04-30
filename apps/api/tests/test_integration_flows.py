@@ -297,6 +297,7 @@ def test_empty_context_task_still_generates_recommendation() -> None:
         "subtasks_total": 0,
         "subtasks_completed": 0,
         "active_obstacles": 0,
+        "resolved_obstacles_included": 0,
     }
 
     app.dependency_overrides.clear()

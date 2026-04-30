@@ -296,6 +296,26 @@ export const apiClient = {
     }
   },
 
+  async blockTask(
+    taskId: number,
+    payload: { blocker_type: string; blocker_reason: string; severity: string },
+  ): Promise<Task> {
+    return apiFetch<Task>(`/tasks/${taskId}/block`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async unblockTask(
+    taskId: number,
+    payload: { resolution_notes: string; next_status?: TaskStatus | null },
+  ): Promise<Task> {
+    return apiFetch<Task>(`/tasks/${taskId}/unblock`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
   async uploadSource(formData: FormData): Promise<{ source_document: SourceDocument; chunk_count: number }> {
     const response = await fetch(`${API_BASE_URL}/sources/upload`, {
       method: "POST",

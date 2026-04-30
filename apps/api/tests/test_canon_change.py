@@ -101,6 +101,141 @@ def _seed_canon_versions(db: Session, *, doc_id: str) -> tuple[SourceDocument, S
     return prev, new
 
 
+def test_change_summary_prompt_includes_both_versions_and_no_deletion_instruction() -> None:
+    """Pin the prompt structure: both v1 and v2 contents are present with
+    explicit labels, and the explicit "do not call v2 deleted" instruction
+    is included."""
+    from app.canon_context import (
+        build_canon_change_system_prompt,
+        build_canon_change_user_message,
+    )
+
+    system_prompt = build_canon_change_system_prompt(canon_doc_label="vendor-onboarding")
+    user_message = build_canon_change_user_message(
+        diff_text="-old line\n+new line",
+        active_task_titles=["Onboard new vendor"],
+        previous_text="VERSION 1: original vendor onboarding policy.",
+        new_text="VERSION 2: revised vendor onboarding policy with stricter timelines.",
+    )
+
+    # System prompt carries the explicit guard.
+    assert "NEVER describe VERSION 2" in system_prompt
+    assert '"deleted"' in system_prompt
+    assert '"empty"' in system_prompt
+    assert "MODIFICATION" in system_prompt
+
+    # User message labels both versions and includes both bodies.
+    assert "VERSION 1 (PREVIOUS)" in user_message
+    assert "VERSION 2 (CURRENT)" in user_message
+    assert "original vendor onboarding policy" in user_message
+    assert "revised vendor onboarding policy with stricter timelines" in user_message
+    assert "Unified diff" in user_message
+
+
+def test_change_summary_post_processing_logs_warning_on_deletion_language(
+    monkeypatch: pytest.MonkeyPatch, caplog
+) -> None:
+    """If the LLM still produces "v2 was deleted" despite the prompt, log
+    a warning so the regression is observable. The change_event still
+    persists — the warning is observability, not a block."""
+    import logging
+
+    _, SessionTesting = _setup_full_db()
+    db: Session = SessionTesting()
+    prev, new = _seed_canon_versions(db, doc_id="warn-test")
+
+    class _DeletionVoiceProvider:
+        def analyze_canon_change(self, *, system_prompt, user_message):  # type: ignore[no-untyped-def]
+            from app.providers import CanonChangeAnalysis
+            return CanonChangeAnalysis(
+                change_summary="VERSION 2 was deleted, leaving the operation with no policy.",
+                impact_analysis="Operators should re-read.",
+                affected_task_titles=[],
+            )
+
+    with caplog.at_level(logging.WARNING, logger="app.services.canon_change"):
+        from app.services.canon_change import detect_canon_change
+
+        event = detect_canon_change(
+            db,
+            new_source=new,
+            previous_source=prev,
+            ai_provider=_DeletionVoiceProvider(),
+        )
+        db.commit()
+
+    assert event is not None  # event still persists despite the warning
+    assert event.change_summary.startswith("VERSION 2 was deleted")
+
+    misleading = [
+        r for r in caplog.records
+        if r.message == "canon_change_summary uses deletion language while v2 has content"
+    ]
+    assert len(misleading) == 1, "expected exactly one warning about deletion language"
+    ctx = (misleading[0].__dict__.get("context") or {}) if not isinstance(
+        misleading[0].__dict__.get("context"), dict
+    ) else misleading[0].__dict__["context"]
+    assert ctx.get("matched_tokens") and "deleted" in ctx["matched_tokens"]
+    db.close()
+
+
+def test_change_summary_no_warning_when_v2_genuinely_empty(
+    monkeypatch: pytest.MonkeyPatch, caplog
+) -> None:
+    """The guardrail must NOT fire when v2 is literally empty — deletion
+    language is accurate in that case."""
+    import logging
+
+    _, SessionTesting = _setup_full_db()
+    db: Session = SessionTesting()
+
+    prev = SourceDocument(
+        filename="canon_v1.txt", source_type="canon_doc",
+        canonical_doc_id="empty-v2", version_label="v1",
+        is_active_canon_version=False,
+        extracted_text="Original policy with substantive content.",
+        source_path="inline:v1",
+    )
+    empty_new = SourceDocument(
+        filename="canon_v2.txt", source_type="canon_doc",
+        canonical_doc_id="empty-v2", version_label="v2",
+        is_active_canon_version=True,
+        extracted_text="",  # genuinely empty
+        source_path="inline:v2",
+    )
+    db.add_all([prev, empty_new])
+    db.commit()
+    db.refresh(prev)
+    db.refresh(empty_new)
+
+    class _DeletionVoiceProvider:
+        def analyze_canon_change(self, *, system_prompt, user_message):  # type: ignore[no-untyped-def]
+            from app.providers import CanonChangeAnalysis
+            return CanonChangeAnalysis(
+                change_summary="VERSION 2 has been deleted/cleared.",
+                impact_analysis="The policy no longer exists.",
+                affected_task_titles=[],
+            )
+
+    with caplog.at_level(logging.WARNING, logger="app.services.canon_change"):
+        from app.services.canon_change import detect_canon_change
+
+        detect_canon_change(
+            db, new_source=empty_new, previous_source=prev,
+            ai_provider=_DeletionVoiceProvider(),
+        )
+        db.commit()
+
+    misleading = [
+        r for r in caplog.records
+        if r.message == "canon_change_summary uses deletion language while v2 has content"
+    ]
+    assert len(misleading) == 0, (
+        "guardrail fired even though v2 is genuinely empty — false positive"
+    )
+    db.close()
+
+
 def test_detect_canon_change_creates_event_and_marks_task() -> None:
     _, SessionTesting = _setup_full_db()
     db: Session = SessionTesting()

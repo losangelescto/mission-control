@@ -67,6 +67,8 @@ def detect_canon_change(
             user_message=build_canon_change_user_message(
                 diff_text=diff_text,
                 active_task_titles=[task.title for task in active_tasks],
+                previous_text=previous_source.extracted_text or "",
+                new_text=new_source.extracted_text or "",
             ),
         )
     except Exception:
@@ -86,6 +88,13 @@ def detect_canon_change(
             impact_analysis="No analysis available — operators should re-read the new canon manually.",
             affected_task_titles=[],
         )
+
+    _warn_if_deletion_language_misapplied(
+        change_summary=analysis.change_summary,
+        previous_text=previous_source.extracted_text or "",
+        new_text=new_source.extracted_text or "",
+        canon_doc_id=new_source.canonical_doc_id,
+    )
 
     affected_task_ids = _resolve_affected_task_ids(
         analysis_titles=analysis.affected_task_titles,
@@ -143,6 +152,43 @@ def _produce_unified_diff(
     if not truncated:
         return ""
     return "\n".join(truncated)
+
+
+_DELETION_LANGUAGE_TOKENS = ("deleted", "removed", "empty", "missing", "cleared")
+
+
+def _warn_if_deletion_language_misapplied(
+    *,
+    change_summary: str,
+    previous_text: str,
+    new_text: str,
+    canon_doc_id: str | None,
+) -> None:
+    """Observability for the LLM "v2 was deleted" failure mode.
+
+    Both versions are non-empty when this check fires, so any deletion-style
+    language in the summary is misleading. We log a warning rather than
+    rewriting the summary — the LLM is the authority on tone, but the
+    operator-facing message stays mostly correct via impact_analysis.
+    """
+    if not (previous_text.strip() and new_text.strip()):
+        return  # one side is genuinely empty — deletion language may be accurate.
+    summary_lower = (change_summary or "").lower()
+    matched = [t for t in _DELETION_LANGUAGE_TOKENS if t in summary_lower]
+    if matched:
+        logger.warning(
+            "canon_change_summary uses deletion language while v2 has content",
+            extra={
+                "event": "canon_change_summary_misleading",
+                "context": {
+                    "canon_doc_id": canon_doc_id,
+                    "matched_tokens": matched,
+                    "summary_preview": (change_summary or "")[:200],
+                    "previous_text_len": len(previous_text),
+                    "new_text_len": len(new_text),
+                },
+            },
+        )
 
 
 def _resolve_affected_task_ids(

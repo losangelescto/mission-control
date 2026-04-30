@@ -3,37 +3,18 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-const SOURCE_TYPES = [
+import { resolveSourceTypeAfterFilePick } from "@/lib/upload-source";
+import type { SourceType } from "@/lib/api/types";
+
+const SOURCE_TYPES: readonly SourceType[] = [
   "canon_doc",
   "thread_export",
   "transcript",
   "note",
   "board_seed",
-] as const;
-
-type SourceType = (typeof SOURCE_TYPES)[number];
+];
 
 const ACCEPT_EXTENSIONS = ".pdf,.txt,.md,.docx,.mp3,.mp4,.m4a,.wav,.ogg,.flac,.webm,.mov";
-
-const EXT_TO_TYPE: Record<string, SourceType> = {
-  pdf: "thread_export",
-  docx: "canon_doc",
-  txt: "note",
-  md: "note",
-  mp3: "transcript",
-  m4a: "transcript",
-  wav: "transcript",
-  ogg: "transcript",
-  flac: "transcript",
-  mp4: "transcript",
-  webm: "transcript",
-  mov: "transcript",
-};
-
-function inferType(filename: string): SourceType {
-  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
-  return EXT_TO_TYPE[ext] ?? "note";
-}
 
 const SECONDARY_BUTTON: React.CSSProperties = {
   background: "transparent",
@@ -55,6 +36,17 @@ export default function UploadSource() {
   const [error, setError] = useState<string | null>(null);
   const [chosenName, setChosenName] = useState<string>("");
   const [sourceType, setSourceType] = useState<SourceType>("note");
+  // Track whether the user has explicitly chosen a source type so we never
+  // overwrite their selection with a filename-derived inference. Without
+  // this, picking a file after manually selecting "canon_doc" used to flip
+  // sourceType back, which in turn unmounted the canon-specific section
+  // and dropped the Activate-checkbox state silently.
+  const [sourceTypeUserSet, setSourceTypeUserSet] = useState(false);
+  // Activate toggle is fully controlled — the previous uncontrolled
+  // checkbox lost its visual state when the canon block remounted on a
+  // source-type flip even though the user had ticked it. Holding the
+  // value in state keeps visual + submitted value aligned at all times.
+  const [activate, setActivate] = useState(false);
 
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -63,7 +55,24 @@ export default function UploadSource() {
       return;
     }
     setChosenName(file.name);
-    setSourceType(inferType(file.name));
+    setSourceType(
+      resolveSourceTypeAfterFilePick({
+        current: sourceType,
+        filename: file.name,
+        userExplicitlySetType: sourceTypeUserSet,
+      }),
+    );
+  }
+
+  function onSourceTypeChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    setSourceType(e.target.value as SourceType);
+    setSourceTypeUserSet(true);
+    // If the user moves away from canon_doc, the Activate checkbox is
+    // about to unmount; reset to false so we don't carry a hidden
+    // is_active=true into a non-canon submission if they bounce back.
+    if (e.target.value !== "canon_doc") {
+      setActivate(false);
+    }
   }
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -149,7 +158,7 @@ export default function UploadSource() {
         <select
           name="source_type"
           value={sourceType}
-          onChange={(e) => setSourceType(e.target.value as SourceType)}
+          onChange={onSourceTypeChange}
           required
         >
           {SOURCE_TYPES.map((t) => (
@@ -179,6 +188,8 @@ export default function UploadSource() {
               name="is_active_canon_version"
               type="checkbox"
               value="true"
+              checked={activate}
+              onChange={(e) => setActivate(e.target.checked)}
               style={{ width: "auto", height: "auto" }}
             />
             <span className="small">Activate as the active canon version on upload</span>

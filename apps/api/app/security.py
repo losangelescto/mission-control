@@ -46,14 +46,23 @@ limiter: Limiter = _build_limiter()
 
 def add_security_middleware(app: FastAPI, settings: Settings) -> Limiter:
     origins = parse_cors_origins(settings.cors_origins)
+    # Explicit method + header lists are mandatory when allow_credentials is
+    # True — browsers reject "*" with credentials. X-Idempotency-Key is
+    # included now (even though no current route reads it) so a future
+    # idempotent-write feature does not have to redeploy CORS to ship.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-        allow_headers=["Content-Type", "Authorization", "X-Request-ID"],
+        allow_headers=[
+            "Content-Type",
+            "Authorization",
+            "X-Request-ID",
+            "X-Idempotency-Key",
+        ],
         expose_headers=["X-Request-ID"],
-        max_age=600,
+        max_age=3600,
     )
 
     @app.middleware("http")

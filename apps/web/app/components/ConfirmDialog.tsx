@@ -17,9 +17,9 @@ const OVERLAY: React.CSSProperties = {
 
 const PANEL: React.CSSProperties = {
   background: "var(--bg-base)",
-  color: "var(--text)",
+  color: "var(--text-primary)",
   borderRadius: "var(--radius)",
-  border: "1px solid var(--border-subtle, #e5e7eb)",
+  border: "1px solid var(--border)",
   padding: "1.25rem",
   width: "100%",
   maxWidth: "32rem",

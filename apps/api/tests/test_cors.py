@@ -80,3 +80,61 @@ def test_post_with_configured_origin_returns_allow_origin_header() -> None:
     res = client.post("/echo", json={"x": 1}, headers={"Origin": origin})
     assert res.status_code == 200
     assert res.headers.get("access-control-allow-origin") == origin
+
+
+# ─── Latent-bug guard: explicit headers list ────────────────────────────
+# When allow_credentials=True browsers refuse "*" wildcards on methods or
+# headers, so the middleware must spell each one out. The next four tests
+# pin the contract so a future refactor cannot silently drop a header and
+# break browser POSTs without anyone noticing in the smoke checks.
+
+def _preflight(client: TestClient, *, request_headers: str) -> object:
+    return client.options(
+        "/echo",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": request_headers,
+        },
+    )
+
+
+def test_options_preflight_returns_200_with_cors_headers() -> None:
+    client = _client_with_cors("http://localhost:3000")
+    res = _preflight(client, request_headers="Content-Type")
+    assert res.status_code == 200
+    assert res.headers.get("access-control-allow-origin") == "http://localhost:3000"
+    assert res.headers.get("access-control-max-age")
+
+
+def test_options_preflight_includes_post_in_allow_methods() -> None:
+    client = _client_with_cors("http://localhost:3000")
+    res = _preflight(client, request_headers="Content-Type")
+    methods = res.headers.get("access-control-allow-methods", "")
+    for verb in ("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"):
+        assert verb in methods, f"{verb} missing from allow-methods: {methods}"
+
+
+def test_options_preflight_includes_content_type_in_allow_headers() -> None:
+    client = _client_with_cors("http://localhost:3000")
+    res = _preflight(client, request_headers="Content-Type")
+    headers = res.headers.get("access-control-allow-headers", "").lower()
+    assert "content-type" in headers
+
+
+def test_options_preflight_includes_authorization_in_allow_headers() -> None:
+    """Future-proofing — the moment any route adds Bearer-token auth the
+    browser will start sending Authorization on preflight; if it isn't
+    in allow_headers the actual POST never fires."""
+    client = _client_with_cors("http://localhost:3000")
+    res = _preflight(client, request_headers="Authorization")
+    headers = res.headers.get("access-control-allow-headers", "").lower()
+    assert "authorization" in headers
+
+
+def test_options_preflight_includes_idempotency_key_in_allow_headers() -> None:
+    """Defense-in-depth for any future idempotent-write feature."""
+    client = _client_with_cors("http://localhost:3000")
+    res = _preflight(client, request_headers="X-Idempotency-Key")
+    headers = res.headers.get("access-control-allow-headers", "").lower()
+    assert "x-idempotency-key" in headers

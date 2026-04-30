@@ -400,13 +400,20 @@ Output schema — return a JSON object with EXACTLY one key:
 
 _CANON_CHANGE_INSTRUCTIONS = """CANON-CHANGE ANALYSIS MODE INSTRUCTIONS:
 
-A new version of a canon document has been activated. Your job is to read the \
-diff and the list of currently-active tasks, then explain — concretely — what \
-operators should re-check.
+You will be given two versions of a canon document — VERSION 1 (PREVIOUS) and \
+VERSION 2 (CURRENT, just activated) — plus a unified diff and the list of \
+currently-active tasks. Your job is to explain — concretely — what operators \
+should re-check.
 
-Be specific. Do NOT say "review your tasks". Name the actual change in the \
-canon, then name which kinds of in-flight work are most likely to be \
-out-of-date because of it.
+VERSION 2 has different content from VERSION 1 but is NOT empty. Describe the \
+change as a MODIFICATION between two valid policies. NEVER describe VERSION 2 \
+as "deleted", "removed", "empty", "cleared", or "missing" unless VERSION 2 \
+literally contains no text. The diff format may show deletion+insertion blocks; \
+read those as one substitution, not as a removal.
+
+Focus on what VERSION 2 ADDS, REMOVES, or CHANGES relative to VERSION 1. \
+Do NOT say "review your tasks". Name the actual change in the canon, then name \
+which kinds of in-flight work are most likely to be out-of-date because of it.
 
 Output schema — return a JSON object with EXACTLY these keys:
   "change_summary":        2-4 sentences describing what materially changed
@@ -510,14 +517,38 @@ def build_canon_change_system_prompt(*, canon_doc_label: str) -> str:
     )
 
 
+_CANON_TEXT_PREVIEW_MAX = 4000
+
+
+def _preview_canon_text(text: str, label: str) -> str:
+    """Trim a canon body for the LLM prompt while keeping enough signal to
+    describe modifications. Truncation is honest — we mark it explicitly so
+    the LLM doesn't infer "the rest was deleted"."""
+    body = text or ""
+    if not body.strip():
+        return f"{label} (EMPTY DOCUMENT)"
+    if len(body) <= _CANON_TEXT_PREVIEW_MAX:
+        return f"{label}:\n{body}"
+    return (
+        f"{label} (first {_CANON_TEXT_PREVIEW_MAX} chars of {len(body)}):\n"
+        f"{body[:_CANON_TEXT_PREVIEW_MAX]}\n…(truncated for prompt budget; full document still in force)"
+    )
+
+
 def build_canon_change_user_message(
     *,
     diff_text: str,
     active_task_titles: Sequence[str],
+    previous_text: str = "",
+    new_text: str = "",
 ) -> str:
     titles_block = "\n".join(f"- {t}" for t in active_task_titles) or "(none)"
+    previous_block = _preview_canon_text(previous_text, "VERSION 1 (PREVIOUS)")
+    new_block = _preview_canon_text(new_text, "VERSION 2 (CURRENT)")
     return (
-        "Diff between previous and new canon version:\n\n"
+        f"{previous_block}\n\n"
+        f"{new_block}\n\n"
+        "Unified diff between the two versions:\n\n"
         f"{diff_text or '(no textual diff produced)'}\n\n"
         "Currently-active task titles:\n"
         f"{titles_block}\n\n"

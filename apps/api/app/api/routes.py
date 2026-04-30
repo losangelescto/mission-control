@@ -340,6 +340,7 @@ async def upload_source_route(
     canonical_doc_id: str | None = Form(default=None),
     version_label: str | None = Form(default=None),
     is_active_canon_version: bool = Form(default=False),
+    title: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ) -> SourceUploadResponse:
     file_bytes = await file.read()
@@ -352,6 +353,7 @@ async def upload_source_route(
             canonical_doc_id=canonical_doc_id,
             version_label=version_label,
             is_active_canon_version=is_active_canon_version,
+            title=title,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

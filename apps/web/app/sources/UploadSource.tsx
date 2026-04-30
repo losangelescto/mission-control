@@ -35,6 +35,19 @@ function inferType(filename: string): SourceType {
   return EXT_TO_TYPE[ext] ?? "note";
 }
 
+const SECONDARY_BUTTON: React.CSSProperties = {
+  background: "transparent",
+  border: "1px solid var(--border-input)",
+  borderRadius: "var(--radius)",
+  color: "var(--text-secondary)",
+  cursor: "pointer",
+  padding: "0 1rem",
+  height: 46,
+  fontFamily: "inherit",
+  fontWeight: 600,
+  width: "auto",
+};
+
 export default function UploadSource() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -59,7 +72,7 @@ export default function UploadSource() {
     setBusy(true);
     const fd = new FormData(e.currentTarget);
     // Drop empty optional fields so the API uses its defaults.
-    for (const key of ["canonical_doc_id", "version_label"]) {
+    for (const key of ["canonical_doc_id", "version_label", "title"]) {
       if (!String(fd.get(key) ?? "").trim()) fd.delete(key);
     }
     if (!fd.get("is_active_canon_version")) {
@@ -104,12 +117,30 @@ export default function UploadSource() {
     <form onSubmit={onSubmit} className="stack-sm" style={{ marginTop: "0.5rem" }}>
       <label className="stack-sm">
         <span>File</span>
+        <div className="file-input-row">
+          <label className="file-input-trigger">
+            Choose File
+            <input
+              name="file"
+              type="file"
+              required
+              accept={ACCEPT_EXTENSIONS}
+              onChange={onFileChange}
+              className="file-input-hidden"
+            />
+          </label>
+          <span className="file-input-name">
+            {chosenName || "No file chosen"}
+          </span>
+        </div>
+      </label>
+
+      <label className="stack-sm">
+        <span>Title <span className="small" style={{ color: "var(--text-tertiary)" }}>(optional)</span></span>
         <input
-          name="file"
-          type="file"
-          required
-          accept={ACCEPT_EXTENSIONS}
-          onChange={onFileChange}
+          name="title"
+          type="text"
+          placeholder="Defaults to filename"
         />
       </label>
 
@@ -144,14 +175,15 @@ export default function UploadSource() {
             <input name="version_label" type="text" placeholder="e.g. v3" />
           </label>
           <label style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-            <input name="is_active_canon_version" type="checkbox" value="true" />
+            <input
+              name="is_active_canon_version"
+              type="checkbox"
+              value="true"
+              style={{ width: "auto", height: "auto" }}
+            />
             <span className="small">Activate as the active canon version on upload</span>
           </label>
         </>
-      ) : null}
-
-      {chosenName ? (
-        <div className="small">Selected: {chosenName}</div>
       ) : null}
 
       {error ? (
@@ -160,8 +192,8 @@ export default function UploadSource() {
         </div>
       ) : null}
 
-      <div style={{ display: "flex", gap: "0.5rem" }}>
-        <button type="submit" disabled={busy}>
+      <div className="cta-row">
+        <button type="submit" className="link-btn" disabled={busy}>
           {busy ? "Uploading…" : "Upload"}
         </button>
         <button
@@ -172,11 +204,12 @@ export default function UploadSource() {
             setChosenName("");
           }}
           disabled={busy}
+          style={SECONDARY_BUTTON}
         >
           Cancel
         </button>
       </div>
-      <p className="small" style={{ color: "#6b7280" }}>
+      <p className="small" style={{ color: "var(--text-tertiary)" }}>
         After upload, processing runs in the background — the source will appear in the list with a
         status badge that updates as it completes.
       </p>

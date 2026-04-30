@@ -474,12 +474,22 @@ def ingest_source_upload(
     canonical_doc_id: str | None,
     version_label: str | None,
     is_active_canon_version: bool,
+    title: str | None = None,
 ) -> SourceDocument:
     """Persist the uploaded file and create a queued SourceDocument.
 
     The actual extraction, chunking, and (for media) transcription happens
     in ``app.services.source_pipeline.process_source``, which the route
     schedules as a FastAPI BackgroundTask after this function returns.
+
+    When ``is_active_canon_version=True`` is supplied at upload time on a
+    canon document with a ``canonical_doc_id``, this also runs the full
+    activation pipeline (deactivate prior version, persist a
+    ``CanonChangeEvent`` if applicable, emit ``canon_activated`` and
+    ``canon_change_detected`` audit events) by delegating to
+    ``activate_canon_source``. Without this, the column flag flips on
+    upload but no prior version is deactivated and no change event is
+    created — the demo-blocker bug fixed in this revision.
     """
     logger.info(
         "source ingestion queued",
@@ -502,6 +512,9 @@ def ingest_source_upload(
 
     file_path.write_bytes(file_bytes)
 
+    cleaned_title = (title or "").strip()
+    metadata: dict | None = {"title": cleaned_title} if cleaned_title else None
+
     source_document = create_source_document(
         db,
         {
@@ -513,6 +526,7 @@ def ingest_source_upload(
             "extracted_text": "",
             "source_path": str(file_path),
             "processing_status": "queued",
+            "processing_metadata": metadata,
         },
     )
     from app.services.audit import log_event
@@ -530,6 +544,25 @@ def ingest_source_upload(
     )
     db.commit()
     db.refresh(source_document)
+
+    # Activation pipeline at upload time. Only runs when all preconditions
+    # are met so a half-filled form (e.g. checked "Activate" but left
+    # canonical_doc_id blank) cannot crash the upload — it just doesn't
+    # activate. activate_canon_source itself commits.
+    should_activate = (
+        is_active_canon_version
+        and source_type == "canon_doc"
+        and bool(canonical_doc_id)
+    )
+    if should_activate:
+        try:
+            activate_canon_source(db, source_document.id)
+        except Exception:
+            logger.exception(
+                "upload-time canon activation failed; source remains uploaded",
+                extra={"context": {"source_id": source_document.id}},
+            )
+
     return source_document
 
 

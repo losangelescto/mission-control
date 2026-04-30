@@ -26,6 +26,14 @@ function displayName(filename: string): string {
   return filename.replace(/^[0-9a-f]{32}_/i, "");
 }
 
+// Prefer the user-supplied title (stored in processing_metadata.title at
+// upload time) over the raw filename so the source list reads naturally.
+function sourceLabel(source: { filename: string; processing_metadata?: Record<string, unknown> | null }): string {
+  const meta = source.processing_metadata;
+  const title = meta && typeof meta.title === "string" ? meta.title.trim() : "";
+  return title || displayName(source.filename);
+}
+
 function isMediaFile(filename: string): boolean {
   const lower = filename.toLowerCase();
   return AUDIO_VIDEO_EXTENSIONS.some((ext) => lower.endsWith(ext));
@@ -40,12 +48,12 @@ export default async function SourcesPage({ searchParams }: SourcesPageProps) {
     apiClient.getActiveCanon(),
   ]);
   const activeSet = new Set(activeCanon.map((doc) => doc.id));
+  // Only honour an explicit ?source_id= in the URL. The previous auto-pick
+  // of sources[0] flashed the next source's detail (and its delete-confirm
+  // modal binding) into the panel right after a force-delete redirected
+  // back here without a selection. Empty selection now means empty panel.
   const selectedSource =
-    sourceId != null
-      ? await apiClient.getSource(sourceId).catch(() => null)
-      : sources.length > 0
-        ? sources[0]
-        : null;
+    sourceId != null ? await apiClient.getSource(sourceId).catch(() => null) : null;
 
   const selectedStatus = selectedSource
     ? await apiClient.getSourceStatus(selectedSource.id).catch(() => null)
@@ -77,7 +85,7 @@ export default async function SourcesPage({ searchParams }: SourcesPageProps) {
               <li key={source.id}>
                 <div>
                   <Link href={`/sources?source_id=${source.id}`}>
-                    <strong>{displayName(source.filename)}</strong>
+                    <strong>{sourceLabel(source)}</strong>
                   </Link>
                 </div>
                 <div className="small">
@@ -96,7 +104,12 @@ export default async function SourcesPage({ searchParams }: SourcesPageProps) {
           {selectedSource ? (
             <div className="stack-sm">
               <div>
-                <strong>{displayName(selectedSource.filename)}</strong>
+                <strong>{sourceLabel(selectedSource)}</strong>
+                {sourceLabel(selectedSource) !== displayName(selectedSource.filename) ? (
+                  <span className="small" style={{ marginLeft: "0.5rem", color: "var(--text-tertiary)" }}>
+                    ({displayName(selectedSource.filename)})
+                  </span>
+                ) : null}
               </div>
               <div className="small">ID: {selectedSource.id}</div>
               <div className="small">Type: {selectedSource.source_type}</div>
@@ -128,7 +141,7 @@ export default async function SourcesPage({ searchParams }: SourcesPageProps) {
               <div style={{ marginTop: "0.5rem" }}>
                 <DeleteSourceButton
                   sourceId={selectedSource.id}
-                  sourceLabel={displayName(selectedSource.filename)}
+                  sourceLabel={sourceLabel(selectedSource)}
                   isActiveCanon={selectedSource.is_active_canon_version}
                 />
               </div>

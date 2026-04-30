@@ -7,12 +7,13 @@ import { usePathname } from 'next/navigation'
 import CanonChangesBadge from './CanonChangesBadge'
 
 const NAV_LINKS = [
-  { href: '/dashboard',     label: 'Dashboard'     },
-  { href: '/tasks',         label: 'Tasks'         },
-  { href: '/sources',       label: 'Sources'       },
-  { href: '/canon-changes', label: 'Canon Changes' },
-  { href: '/review',        label: 'Review'        },
-  { href: '/metrics',       label: 'Metrics'       },
+  { href: '/dashboard',        label: 'Dashboard'      },
+  { href: '/tasks',            label: 'Tasks'          },
+  { href: '/tasks/candidates', label: 'Suggested'      },
+  { href: '/sources',          label: 'Sources'        },
+  { href: '/canon-changes',    label: 'Canon Changes'  },
+  { href: '/review',           label: 'Review'         },
+  { href: '/metrics',          label: 'Metrics'        },
 ]
 
 function MenuIcon() {

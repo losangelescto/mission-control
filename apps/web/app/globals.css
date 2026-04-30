@@ -741,6 +741,66 @@ textarea::placeholder {
   color: var(--text-tertiary);
 }
 
+/* appearance:none on <select> strips the native chevron; add one back so
+   every select renders consistently across browsers. data: URL keeps this
+   self-contained with no extra asset request. */
+select {
+  padding-right: 2rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none' stroke='%236A6A6A' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.875rem center;
+  background-size: 10px 6px;
+}
+
+/* Hide the native "Choose File" widget so the surrounding label can
+   render a real button. The label still receives the click and forwards
+   it to the input via the standard label/control association. */
+.file-input-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.file-input-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 1rem;
+  height: 46px;
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  width: auto;
+}
+
+.file-input-trigger:hover {
+  background: var(--bg-hover);
+}
+
+.file-input-row {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  flex-wrap: wrap;
+}
+
+.file-input-name {
+  font-size: 0.875rem;
+  color: var(--text-tertiary);
+}
+
 .task-notes-input {
   height: auto;
   padding: 0.625rem 0.875rem;

@@ -11,6 +11,7 @@ import {
   TYPE_LABEL,
   groupSearchResults,
 } from "@/lib/search-grouping";
+import { HYPHEN_HINT_TEXT, shouldShowHyphenHint } from "@/lib/search-hint";
 
 const DEBOUNCE_MS = 300;
 const MIN_QUERY = 3;
@@ -162,7 +163,7 @@ export default function SearchBar() {
           ) : null}
           {!loading && data && !hasResults ? (
             <div className="small" style={{ padding: "0.6rem" }}>
-              No matches.
+              {shouldShowHyphenHint(query, hasResults) ? HYPHEN_HINT_TEXT : "No matches."}
             </div>
           ) : null}
 

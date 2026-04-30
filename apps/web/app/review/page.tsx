@@ -6,10 +6,12 @@ import { firstSearchParam } from "@/lib/search-params";
 
 // Map section title → data-section slug for CSS semantic color targeting
 const SECTION_SLUG: Record<string, string> = {
-  "Urgent":   "urgent",
-  "Blocked":  "blocked",
-  "Stale":    "stale",
-  "Due Soon": "due-soon",
+  "Urgent":         "urgent",
+  "Blocked":        "blocked",
+  "Stale":          "stale",
+  "Due Soon":       "due-soon",
+  "Recurring Due":  "stale",
+  "Candidate Review": "due-soon",
 };
 
 function TaskList({
@@ -54,6 +56,86 @@ function TaskList({
   );
 }
 
+function RecurringDueList({
+  items,
+}: {
+  items: {
+    occurrence_id: number;
+    recurrence_template_id: number;
+    task_id: number | null;
+    occurrence_date: string;
+    status: string;
+  }[];
+}) {
+  return (
+    <article className="panel" data-section="stale" data-testid="bucket-recurring-due">
+      <h2>Recurring Due ({items.length})</h2>
+      <ul className="list">
+        {items.length === 0 ? (
+          <li className="small">No items</li>
+        ) : (
+          items.slice(0, 8).map((item) => (
+            <li key={`recurring-${item.occurrence_id}`}>
+              <div>
+                {item.task_id ? (
+                  <Link
+                    href={`/tasks?selected=${item.task_id}`}
+                    style={{ fontWeight: 600 }}
+                  >
+                    Task #{item.task_id}
+                  </Link>
+                ) : (
+                  <span style={{ fontWeight: 600 }}>
+                    Template #{item.recurrence_template_id}
+                  </span>
+                )}
+              </div>
+              <div className="small">Occurrence: {item.occurrence_date}</div>
+              <div className="small">Status: {item.status}</div>
+            </li>
+          ))
+        )}
+      </ul>
+    </article>
+  );
+}
+
+function CandidateReviewList({
+  items,
+}: {
+  items: { id: number; title: string; suggested_priority: string | null; source_document_id: number }[];
+}) {
+  return (
+    <article className="panel" data-section="due-soon" data-testid="bucket-candidate-review">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "0.5rem" }}>
+        <h2>Candidate Review ({items.length})</h2>
+        <Link href="/tasks/candidates" className="small">
+          Open all →
+        </Link>
+      </div>
+      <ul className="list">
+        {items.length === 0 ? (
+          <li className="small">No items</li>
+        ) : (
+          items.slice(0, 8).map((item) => (
+            <li key={`candidate-${item.id}`}>
+              <div>
+                <Link href="/tasks/candidates" style={{ fontWeight: 600 }}>
+                  {item.title}
+                </Link>
+              </div>
+              <div className="small">
+                {item.suggested_priority ? `Priority: ${item.suggested_priority} · ` : ""}
+                Source #{item.source_document_id}
+              </div>
+            </li>
+          ))
+        )}
+      </ul>
+    </article>
+  );
+}
+
 function formatCadenceDate(iso: string | null): string {
   if (!iso) return "Never";
   const d = new Date(iso);
@@ -61,6 +143,9 @@ function formatCadenceDate(iso: string | null): string {
 }
 
 function CadenceIndicators({ cadences }: { cadences: CadenceStatus[] }) {
+  // Ad-hoc reviews have no schedule; show them as a fifth card alongside
+  // the cadence-driven ones so the "Start Ad Hoc Review" entry point lives
+  // in the same scan band as Daily / Weekly / Monthly / Quarterly.
   return (
     <div className="grid cols-3" style={{ marginBottom: "0" }}>
       {cadences.map((c) => (
@@ -88,6 +173,30 @@ function CadenceIndicators({ cadences }: { cadences: CadenceStatus[] }) {
           </div>
         </article>
       ))}
+      <article
+        className="panel"
+        style={{ borderLeft: "3px solid var(--cyan, #0891B2)" }}
+        data-testid="cadence-card-ad_hoc"
+      >
+        <h3>Ad Hoc</h3>
+        <div className="small" style={{ marginTop: "0.375rem", color: "var(--text-tertiary)" }}>
+          On demand — no fixed schedule.
+        </div>
+        <div style={{ marginTop: "0.625rem" }}>
+          <Link
+            href="/review?cadence=ad_hoc#review-session"
+            className="link-btn"
+            style={{
+              padding: "0.375rem 0.75rem",
+              height: "auto",
+              fontSize: "0.8125rem",
+              display: "inline-block",
+            }}
+          >
+            Start Ad Hoc Review
+          </Link>
+        </div>
+      </article>
     </div>
   );
 }
@@ -128,6 +237,8 @@ export default async function ReviewPage({ searchParams }: ReviewPageProps) {
         <TaskList title="Blocked"  items={review.blocked}  />
         <TaskList title="Stale"    items={review.stale}    />
         <TaskList title="Due Soon" items={review.due_soon} />
+        <RecurringDueList items={review.recurring_due} />
+        <CandidateReviewList items={review.candidate_review} />
       </div>
 
       {/* Review Session */}

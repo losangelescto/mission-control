@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app import db as db_module
+from app.config import get_settings
 from app.db import get_db
 from app.main import app
 from app.models import (
@@ -231,6 +232,192 @@ def _seed_canon_via_repo(db: Session, *, doc_id: str, version: str, text: str, a
     db.commit()
     db.refresh(src)
     return src
+
+
+def _ingest_canon_upload(
+    db: Session,
+    *,
+    doc_id: str,
+    version: str,
+    text: str,
+    active: bool,
+    title: str | None = None,
+):
+    """Drive ingest_source_upload directly with a tiny .txt payload.
+
+    Mirrors what the POST /sources/upload route does without the FastAPI
+    multipart layer — sufficient for the upload-time activation pipeline
+    tests because the file_kind helper accepts .txt as a known suffix.
+    """
+    from app.services import ingest_source_upload
+
+    return ingest_source_upload(
+        db,
+        filename=f"{doc_id}-{version}.txt",
+        source_type="canon_doc",
+        file_bytes=text.encode("utf-8"),
+        canonical_doc_id=doc_id,
+        version_label=version,
+        is_active_canon_version=active,
+        title=title,
+    )
+
+
+def test_upload_with_is_active_canon_true_runs_activation_pipeline(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    """Uploading v2 with is_active_canon_version=true should deactivate v1,
+    persist a CanonChangeEvent, mark affected tasks pending, and emit
+    canon_change_detected — without any explicit POST /canon/activate call.
+    """
+    _, SessionTesting = _setup_full_db()
+    monkeypatch.setattr(db_module, "SessionLocal", SessionTesting)
+    settings = get_settings()
+    monkeypatch.setattr(settings, "sources_upload_dir", str(tmp_path / "uploads"))
+    db: Session = SessionTesting()
+
+    v1 = _ingest_canon_upload(
+        db, doc_id="upload-pipeline", version="v1",
+        text="Original vendor onboarding policy.", active=True,
+    )
+    affected = _seed_active_task(
+        db,
+        title="Vendor onboarding setup",
+        description="references upload-pipeline checklist",
+    )
+    affected_id = affected.id
+
+    v2 = _ingest_canon_upload(
+        db, doc_id="upload-pipeline", version="v2",
+        text="Updated vendor onboarding policy with stricter timelines.",
+        active=True,
+    )
+
+    from app.models import AuditEvent, CanonChangeEvent
+    from app.repositories import get_source_document_by_id
+
+    # Prior version flag flipped off, new one is active.
+    db.refresh(v1)
+    db.refresh(v2)
+    assert v1.is_active_canon_version is False
+    assert v2.is_active_canon_version is True
+
+    # CanonChangeEvent persisted with the right pair.
+    events = list(db.scalars(select(CanonChangeEvent)).all())
+    assert len(events) == 1
+    assert events[0].previous_source_id == v1.id
+    assert events[0].new_source_id == v2.id
+
+    # Affected task flag flipped.
+    refreshed = get_source_document_by_id(db, affected_id) and db.get(
+        type(affected), affected_id
+    )
+    assert refreshed is not None and refreshed.canon_update_pending is True
+
+    # Audit events for the activation pipeline emitted.
+    actions = [
+        e.action
+        for e in db.scalars(select(AuditEvent)).all()
+        if e.entity_type in ("source", "canon_change")
+    ]
+    assert "canon_activated" in actions
+    assert "canon_change_detected" in actions
+    db.close()
+
+
+def test_upload_with_is_active_canon_false_does_not_trigger_activation(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    """If the user uploads but doesn't tick "Activate", no change event."""
+    _, SessionTesting = _setup_full_db()
+    monkeypatch.setattr(db_module, "SessionLocal", SessionTesting)
+    settings = get_settings()
+    monkeypatch.setattr(settings, "sources_upload_dir", str(tmp_path / "uploads"))
+    db: Session = SessionTesting()
+
+    _ingest_canon_upload(
+        db, doc_id="not-activated", version="v1",
+        text="Draft vendor policy.", active=False,
+    )
+
+    from app.models import AuditEvent, CanonChangeEvent
+
+    events = list(db.scalars(select(CanonChangeEvent)).all())
+    assert len(events) == 0
+    actions = [e.action for e in db.scalars(select(AuditEvent)).all()]
+    assert "canon_activated" not in actions
+    db.close()
+
+
+def test_upload_first_version_with_is_active_emits_canon_activated_with_null_previous(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    """First-ever version of a canon doc: no prior to deactivate, no
+    change event — but the canon_activated audit must still fire with
+    metadata.previous_source_id=None so the trail records the first
+    activation moment."""
+    _, SessionTesting = _setup_full_db()
+    monkeypatch.setattr(db_module, "SessionLocal", SessionTesting)
+    settings = get_settings()
+    monkeypatch.setattr(settings, "sources_upload_dir", str(tmp_path / "uploads"))
+    db: Session = SessionTesting()
+
+    _ingest_canon_upload(
+        db, doc_id="first-version", version="v1",
+        text="First-ever policy.", active=True,
+    )
+
+    from app.models import AuditEvent, CanonChangeEvent
+
+    events = list(db.scalars(select(CanonChangeEvent)).all())
+    assert len(events) == 0  # no prior, no change
+
+    activations = [
+        e
+        for e in db.scalars(select(AuditEvent)).all()
+        if e.action == "canon_activated"
+    ]
+    assert len(activations) == 1
+    assert (activations[0].event_metadata or {}).get("previous_source_id") is None
+    db.close()
+
+
+def test_upload_writes_title_into_processing_metadata(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    _, SessionTesting = _setup_full_db()
+    monkeypatch.setattr(db_module, "SessionLocal", SessionTesting)
+    settings = get_settings()
+    monkeypatch.setattr(settings, "sources_upload_dir", str(tmp_path / "uploads"))
+    db: Session = SessionTesting()
+
+    src = _ingest_canon_upload(
+        db, doc_id="titled", version="v1",
+        text="x", active=False,
+        title="Q1 Vendor Onboarding Policy",
+    )
+    db.refresh(src)
+    assert src.processing_metadata == {"title": "Q1 Vendor Onboarding Policy"}
+    db.close()
+
+
+def test_upload_blank_title_leaves_processing_metadata_unset(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    _, SessionTesting = _setup_full_db()
+    monkeypatch.setattr(db_module, "SessionLocal", SessionTesting)
+    settings = get_settings()
+    monkeypatch.setattr(settings, "sources_upload_dir", str(tmp_path / "uploads"))
+    db: Session = SessionTesting()
+
+    src = _ingest_canon_upload(
+        db, doc_id="blank-title", version="v1",
+        text="x", active=False,
+        title="   ",
+    )
+    db.refresh(src)
+    assert src.processing_metadata is None
+    db.close()
 
 
 def test_v1_then_v2_activation_creates_change_event(

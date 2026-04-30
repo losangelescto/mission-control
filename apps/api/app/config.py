@@ -14,7 +14,15 @@ class Settings(BaseSettings):
     sources_upload_dir: str = "data/uploads"
 
     # Comma-separated list of allowed origins for CORS. No wildcard in prod.
-    cors_origins: str = "http://localhost:3000"
+    # The deployed staging/prod web FQDNs are baked in as a safety net so
+    # that a missing CORS_ORIGINS env var on the container does not silently
+    # block every browser write (the symptom is a 400 on every preflight).
+    cors_origins: str = (
+        "http://localhost:3000,"
+        "http://127.0.0.1:3000,"
+        "https://mc-web.lemonplant-e20984ee.canadacentral.azurecontainerapps.io,"
+        "https://mc-web-staging.lemonplant-e20984ee.canadacentral.azurecontainerapps.io"
+    )
 
     # Rate limits. Format accepted by slowapi: "<count>/<period>"
     rate_limit_default: str = "100/minute"

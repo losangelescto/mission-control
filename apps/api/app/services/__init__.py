@@ -281,19 +281,29 @@ def create_task_update(db: Session, task_id: int, payload: dict) -> TaskUpdate |
     if task is None:
         return None
     update = repo_create_task_update(db, {"task_id": task_id, **payload})
-    log_event(
-        db,
-        entity_type="task_update",
-        entity_id=update.id,
-        action="created",
-        actor=update.created_by or SYSTEM_ACTOR,
-        changes={
-            "summary": update.summary,
-            "update_type": update.update_type,
-            "next_step": update.next_step,
-        },
-        metadata={"task_id": task_id},
-    )
+    # Audit is best-effort; never block the underlying write. log_event
+    # itself wraps the insert in a SAVEPOINT, but we also defend the call
+    # site so an unexpected exception (a future refactor, a mocked hook
+    # in a test) cannot poison the parent transaction.
+    try:
+        log_event(
+            db,
+            entity_type="task_update",
+            entity_id=update.id,
+            action="created",
+            actor=update.created_by or SYSTEM_ACTOR,
+            changes={
+                "summary": update.summary,
+                "update_type": update.update_type,
+                "next_step": update.next_step,
+            },
+            metadata={"task_id": task_id},
+        )
+    except Exception:
+        logger.exception(
+            "audit emit failed for task_update.created",
+            extra={"context": {"task_id": task_id, "update_id": update.id}},
+        )
     db.commit()
     db.refresh(update)
     return update

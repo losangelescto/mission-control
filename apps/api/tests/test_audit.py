@@ -245,6 +245,67 @@ def test_status_change_emits_dedicated_status_changed_event(
     app.dependency_overrides.clear()
 
 
+def test_task_update_create_succeeds_when_audit_hook_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Audit failures must never block the underlying write.
+
+    `log_event` is wrapped in a SAVEPOINT so an audit error rolls back only
+    the audit insert, not the parent transaction. Even if the wrapper
+    itself were to raise (defensive: a future refactor might forget the
+    try/except), the create_task_update service should still persist the
+    task_update row. This test pins that contract.
+    """
+    _, SessionTesting = _setup_full_db()
+    db: Session = SessionTesting()
+
+    task = Task(
+        title="audit-hook-bomb",
+        description="",
+        objective="",
+        standard="Consistency",
+        status="up_next",
+        priority="medium",
+        owner_name="alex",
+        assigner_name="jordan",
+    )
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+    task_id = task.id
+    db.close()
+
+    from app import services
+
+    def _bomb(*_args, **_kwargs):
+        raise RuntimeError("audit hook simulated failure")
+
+    monkeypatch.setattr(services, "log_event", _bomb, raising=False)
+    # Also patch the locally-imported reference used inside create_task_update.
+    import app.services.audit as audit_module
+
+    monkeypatch.setattr(audit_module, "log_event", _bomb)
+
+    db = SessionTesting()
+    update = services.create_task_update(
+        db,
+        task_id,
+        {
+            "update_type": "note",
+            "summary": "this should still persist",
+            "what_happened": "",
+            "options_considered": "",
+            "steps_taken": "",
+            "next_step": "",
+            "created_by": "alex",
+        },
+    )
+    assert update is not None, "create_task_update must not return None when audit raises"
+    assert update.summary == "this should still persist"
+    assert update.id is not None
+    db.close()
+
+
 def test_task_update_creation_emits_audit_and_appears_in_audit_task(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -43,10 +43,11 @@ function groupTasks(tasks: Task[]): Record<string, Task[]> {
 export function KanbanBoard({ initialTasks }: { initialTasks: Task[] }) {
   const [columns, setColumns] = useState(() => groupTasks(initialTasks));
   // @hello-pangea/dnd injects dynamic data-rfd-* ids and inline transform
-  // styles into Draggable/Droppable on first client render. Those values
-  // can't be reproduced server-side, so SSR + hydration produces a
-  // mismatch (React #418). We render a static, drag-free placeholder
-  // until mount, then upgrade to the DnD tree on the client only.
+  // styles into Draggable/Droppable on first client render — values that
+  // cannot be reproduced server-side. To eliminate every hydration-mismatch
+  // surface (React #418), we render an empty container during SSR and the
+  // first client render, then upgrade to the live DnD tree once mounted.
+  // The empty container preserves layout space until the kanban paints.
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setMounted(true);
@@ -100,57 +101,12 @@ export function KanbanBoard({ initialTasks }: { initialTasks: Task[] }) {
 
   if (!mounted) {
     return (
-      <div className="kanban" suppressHydrationWarning>
-        {COLUMNS.map((col) => {
-          const items = columns[col.key] ?? [];
-          return (
-            <div className="kanban-col" key={col.key}>
-              <Link
-                href={`/tasks?status=${col.key}`}
-                className="kanban-col-header"
-                data-status={col.key}
-              >
-                <span className="kanban-col-title">{col.label}</span>
-                <span className="kanban-col-count">{items.length}</span>
-              </Link>
-              <div className="kanban-col-body">
-                {items.length === 0 ? (
-                  <p className="kanban-empty">No tasks</p>
-                ) : (
-                  items.map((task) => (
-                    <Link
-                      key={task.id}
-                      href={`/tasks?status=${task.status}&selected=${task.id}`}
-                      className="kanban-card"
-                    >
-                      <div className="kanban-card-title">
-                        {truncate(task.title, 60)}
-                      </div>
-                      <div className="kanban-card-desc">
-                        {truncate(task.description, 80)}
-                      </div>
-                      <div className="kanban-card-footer">
-                        <span data-status={task.status}>
-                          {task.status.replace("_", " ")}
-                        </span>
-                        <span
-                          className="badge"
-                          style={{
-                            background: "var(--bg-hover)",
-                            color: "var(--text-secondary)",
-                          }}
-                        >
-                          {task.priority}
-                        </span>
-                      </div>
-                    </Link>
-                  ))
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      <div
+        className="kanban"
+        aria-busy="true"
+        aria-label="Loading kanban board"
+        suppressHydrationWarning
+      />
     );
   }
 

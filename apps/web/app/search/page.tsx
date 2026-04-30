@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { apiClient } from "@/lib/api/client";
 import { firstSearchParam } from "@/lib/search-params";
+import { TYPE_LABEL } from "@/lib/search-grouping";
 import type { SearchMode, SearchResponse, SearchTypeFilter } from "@/lib/api/types";
 
 type PageProps = {
@@ -148,7 +149,7 @@ export default async function SearchPage({ searchParams }: PageProps) {
                     <Link href={r.url}>
                       <strong>{r.title}</strong>
                     </Link>{" "}
-                    <span className="badge">{r.type.replace("_", " ")}</span>
+                    <span className="badge">{TYPE_LABEL[r.type] ?? r.type}</span>
                   </div>
                   <div
                     className="small"

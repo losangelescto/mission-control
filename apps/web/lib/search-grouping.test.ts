@@ -89,4 +89,12 @@ describe("groupSearchResults", () => {
       expect(TYPE_LABEL[type]).toBeTruthy();
     }
   });
+
+  it("source and source_chunk share the same human label so badges read consistently", () => {
+    // The /search results badge previously rendered r.type.replace("_", " "),
+    // which surfaced "SOURCE CHUNK" while the facet read "Sources" — fixed
+    // by routing both through TYPE_LABEL.
+    expect(TYPE_LABEL.source).toBe("Source");
+    expect(TYPE_LABEL.source_chunk).toBe("Source");
+  });
 });

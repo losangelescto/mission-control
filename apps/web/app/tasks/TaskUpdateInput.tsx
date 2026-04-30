@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+
+import { TimeDisplay } from "@/app/components/TimeDisplay";
 import { TaskUpdate } from "@/lib/api/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -45,17 +47,6 @@ export function TaskUpdateInput({
     }
   }
 
-  function formatTimestamp(iso: string): string {
-    const d = new Date(iso);
-    return d.toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  }
-
   return (
     <div className="stack-sm">
       <h3>Updates</h3>
@@ -84,7 +75,7 @@ export function TaskUpdateInput({
             <li key={u.id}>
               <div style={{ fontSize: "0.9375rem" }}>{u.summary}</div>
               <div className="small" style={{ marginTop: "0.125rem" }}>
-                {u.created_by} &middot; {formatTimestamp(u.created_at)}
+                {u.created_by} &middot; <TimeDisplay iso={u.created_at} />
               </div>
             </li>
           ))}

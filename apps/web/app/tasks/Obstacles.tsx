@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { TimeDisplay } from "@/app/components/TimeDisplay";
 import { Obstacle } from "@/lib/api/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -211,11 +212,7 @@ export function Obstacles({ taskId, initialObstacles }: Props) {
             ) : null}
             {o.resolved_at ? (
               <div className="small" style={{ color: "var(--text-tertiary)" }}>
-                Resolved {new Date(o.resolved_at).toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                })}
+                Resolved <TimeDisplay iso={o.resolved_at} format="date" />
               </div>
             ) : null}
           </div>

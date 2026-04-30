@@ -2,18 +2,9 @@
 
 import { useState } from "react";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { TimeDisplay } from "@/app/components/TimeDisplay";
 
-function formatTimestamp(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export function TaskNotes({
   taskId,
@@ -68,7 +59,7 @@ export function TaskNotes({
       )}
       {!saving && value.trim() === saved && saved && (
         <span className="small" style={{ color: "var(--text-tertiary)" }}>
-          Last saved {formatTimestamp(lastSavedAt)}
+          Last saved <TimeDisplay iso={lastSavedAt} />
         </span>
       )}
     </div>

@@ -34,7 +34,7 @@ export default function AcknowledgeButton({ eventId, alreadyReviewed }: Props) {
 
   return (
     <span className="stack-sm">
-      <button type="button" onClick={onClick} disabled={busy}>
+      <button type="button" className="link-btn" onClick={onClick} disabled={busy}>
         {busy ? "Acknowledging…" : "Acknowledge"}
       </button>
       {err ? <span className="small" style={{ color: "#991b1b" }}>{err}</span> : null}

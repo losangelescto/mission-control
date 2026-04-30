@@ -1,7 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 
 from app.api.routes import router as system_router
 from app.config import get_settings
@@ -43,6 +43,20 @@ def create_app() -> FastAPI:
     add_security_middleware(app, settings)
     add_error_middleware(app)
     app.include_router(system_router)
+
+    # Defense-in-depth OPTIONS catch-all. CORSMiddleware already handles
+    # preflight requests that include an Origin header, but a non-CORS
+    # OPTIONS request (no Origin) still lands on the route handler and
+    # returns 405 because the underlying route only declares POST/PATCH/etc.
+    # This catch-all returns 200 for any path so monitoring tools, health
+    # probes, or future clients sending OPTIONS without an Origin do not
+    # see a misleading 405. CORS preflight responses (which include the
+    # Access-Control-* headers) are still produced by CORSMiddleware before
+    # this handler is ever reached.
+    @app.options("/{full_path:path}")
+    async def options_catch_all(full_path: str) -> Response:  # noqa: ARG001
+        return Response(status_code=200)
+
     return app
 
 

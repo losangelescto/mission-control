@@ -24,18 +24,7 @@ const PANEL: React.CSSProperties = {
   boxShadow: "0 12px 40px rgba(0,0,0,0.35)",
 };
 
-const SECONDARY: React.CSSProperties = {
-  background: "transparent",
-  border: "1px solid var(--border-input)",
-  borderRadius: "var(--radius)",
-  color: "var(--text-secondary)",
-  cursor: "pointer",
-  padding: "0 1rem",
-  height: 44,
-  fontFamily: "inherit",
-  fontWeight: 600,
-  width: "auto",
-};
+// Cancel button uses the canonical .btn-secondary class from globals.css.
 
 export type PromptDialogProps = {
   isOpen: boolean;
@@ -178,7 +167,7 @@ export function PromptDialog({
               type="button"
               onClick={onCancel}
               disabled={busy}
-              style={SECONDARY}
+              className="btn-secondary"
               data-testid="prompt-cancel"
             >
               {cancelLabel}

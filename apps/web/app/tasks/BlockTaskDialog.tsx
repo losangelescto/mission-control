@@ -184,18 +184,7 @@ export function BlockTaskDialog({ taskId, onClose, onBlocked }: Props) {
               type="button"
               onClick={onClose}
               disabled={submitting}
-              style={{
-                background: "transparent",
-                border: "1px solid var(--border-input)",
-                borderRadius: "var(--radius)",
-                color: "var(--text-secondary)",
-                cursor: submitting ? "not-allowed" : "pointer",
-                padding: "0 1rem",
-                height: 44,
-                fontFamily: "inherit",
-                fontWeight: 600,
-                width: "auto",
-              }}
+              className="btn-secondary"
               data-testid="block-cancel"
             >
               Cancel

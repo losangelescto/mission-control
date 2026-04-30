@@ -166,12 +166,7 @@ export function SubTasks({ taskId, initialSubTasks }: Props) {
                   checked={s.status === "completed"}
                   onChange={() => toggleStatus(s)}
                   disabled={busy === `toggle-${s.id}`}
-                  style={{
-                    width: "auto",
-                    height: "auto",
-                    marginTop: "0.25rem",
-                    flexShrink: 0,
-                  }}
+                  style={{ marginTop: "0.25rem" }}
                 />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 600, fontSize: "0.9375rem" }}>
@@ -251,7 +246,7 @@ export function SubTasks({ taskId, initialSubTasks }: Props) {
                         setDeselectedDrafts((prev) => toggleIndex(prev, i))
                       }
                       aria-label={`Include draft: ${d.title}`}
-                      style={{ width: "auto", height: "auto", marginTop: "0.25rem", flexShrink: 0 }}
+                      style={{ marginTop: "0.25rem" }}
                     />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 600, fontSize: "0.9375rem" }}>
@@ -290,18 +285,7 @@ export function SubTasks({ taskId, initialSubTasks }: Props) {
                 setDrafts(null);
                 setDeselectedDrafts(new Set());
               }}
-              style={{
-                background: "transparent",
-                border: "1px solid var(--border-input)",
-                borderRadius: "var(--radius)",
-                color: "var(--text-secondary)",
-                cursor: "pointer",
-                padding: "0 1rem",
-                height: 44,
-                fontFamily: "inherit",
-                fontWeight: 600,
-                width: "auto",
-              }}
+              className="btn-secondary"
             >
               Discard
             </button>
@@ -342,18 +326,7 @@ export function SubTasks({ taskId, initialSubTasks }: Props) {
             <button
               type="button"
               onClick={() => setAddOpen(false)}
-              style={{
-                background: "transparent",
-                border: "1px solid var(--border-input)",
-                borderRadius: "var(--radius)",
-                color: "var(--text-secondary)",
-                cursor: "pointer",
-                padding: "0 1rem",
-                height: 44,
-                fontFamily: "inherit",
-                fontWeight: 600,
-                width: "auto",
-              }}
+              className="btn-secondary"
             >
               Cancel
             </button>
@@ -373,18 +346,7 @@ export function SubTasks({ taskId, initialSubTasks }: Props) {
             type="button"
             onClick={generate}
             disabled={busy !== null}
-            style={{
-              background: "transparent",
-              border: "1px solid var(--border-input)",
-              borderRadius: "var(--radius)",
-              color: "var(--text-secondary)",
-              cursor: "pointer",
-              padding: "0 1rem",
-              height: 44,
-              fontFamily: "inherit",
-              fontWeight: 600,
-              width: "auto",
-            }}
+            className="btn-secondary"
           >
             {busy === "generate" ? "Generating..." : "Generate Sub-Tasks"}
           </button>

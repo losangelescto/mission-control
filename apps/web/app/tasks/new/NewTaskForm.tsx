@@ -163,12 +163,13 @@ export default function NewTaskForm() {
         </div>
       ) : null}
 
-      <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
-        <button type="submit" disabled={submitting}>
+      <div className="cta-row" style={{ marginTop: "0.5rem" }}>
+        <button type="submit" className="link-btn" disabled={submitting}>
           {submitting ? "Creating…" : "Create Task"}
         </button>
         <button
           type="button"
+          className="btn-secondary"
           onClick={() => router.push("/tasks")}
           disabled={submitting}
         >

@@ -168,18 +168,7 @@ export function Obstacles({ taskId, initialObstacles }: Props) {
                 type="button"
                 onClick={() => setResolving(o)}
                 disabled={busy !== null}
-                style={{
-                  background: "transparent",
-                  border: "1px solid var(--border-input)",
-                  borderRadius: "var(--radius)",
-                  color: "var(--text-secondary)",
-                  cursor: "pointer",
-                  padding: "0 1rem",
-                  height: 44,
-                  fontFamily: "inherit",
-                  fontWeight: 600,
-                  width: "auto",
-                }}
+                className="btn-secondary"
               >
                 {busy === `resolve-${o.id}` ? "Resolving..." : "Resolve"}
               </button>
@@ -292,18 +281,7 @@ export function Obstacles({ taskId, initialObstacles }: Props) {
             <button
               type="button"
               onClick={() => setAddOpen(false)}
-              style={{
-                background: "transparent",
-                border: "1px solid var(--border-input)",
-                borderRadius: "var(--radius)",
-                color: "var(--text-secondary)",
-                cursor: "pointer",
-                padding: "0 1rem",
-                height: 44,
-                fontFamily: "inherit",
-                fontWeight: 600,
-                width: "auto",
-              }}
+              className="btn-secondary"
             >
               Cancel
             </button>

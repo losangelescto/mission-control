@@ -39,17 +39,9 @@ export default function DeleteTaskButton({ taskId, taskTitle }: Props) {
     <span className="stack-sm">
       <button
         type="button"
+        className="btn-destructive"
         onClick={() => setOpen(true)}
         disabled={busy}
-        style={{
-          background: "#fee2e2",
-          color: "#991b1b",
-          border: "1px solid #fecaca",
-          padding: "0.35rem 0.6rem",
-          borderRadius: "4px",
-          cursor: busy ? "default" : "pointer",
-          fontSize: "0.85rem",
-        }}
         data-testid="delete-task-trigger"
       >
         {busy ? "Deleting…" : "Delete Task"}

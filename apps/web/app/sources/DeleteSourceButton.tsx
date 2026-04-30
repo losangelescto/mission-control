@@ -44,21 +44,13 @@ export default function DeleteSourceButton({
     <span className="stack-sm">
       <button
         type="button"
+        className="btn-destructive"
         onClick={() => setOpen(true)}
         disabled={busy}
         title={isActiveCanon ? "Active canon — confirm will override protection" : "Delete this source"}
-        style={{
-          background: "transparent",
-          color: "#991b1b",
-          border: "1px solid #fecaca",
-          padding: "0.2rem 0.5rem",
-          borderRadius: "4px",
-          cursor: busy ? "default" : "pointer",
-          fontSize: "0.8rem",
-        }}
         data-testid="delete-source-trigger"
       >
-        {busy ? "…" : "Delete"}
+        {busy ? "Deleting…" : "Delete"}
       </button>
       <ConfirmDialog
         isOpen={open}

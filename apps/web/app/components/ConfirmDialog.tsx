@@ -26,34 +26,9 @@ const PANEL: React.CSSProperties = {
   boxShadow: "0 12px 40px rgba(0,0,0,0.35)",
 };
 
-function destructiveStyle(active: boolean): React.CSSProperties {
-  return {
-    background: "#b91c1c",
-    color: "#fff",
-    border: "none",
-    borderRadius: "var(--radius)",
-    cursor: active ? "pointer" : "not-allowed",
-    padding: "0 1rem",
-    height: 44,
-    fontFamily: "inherit",
-    fontWeight: 600,
-    width: "auto",
-    opacity: active ? 1 : 0.6,
-  };
-}
-
-const SECONDARY: React.CSSProperties = {
-  background: "transparent",
-  border: "1px solid var(--border-input)",
-  borderRadius: "var(--radius)",
-  color: "var(--text-secondary)",
-  cursor: "pointer",
-  padding: "0 1rem",
-  height: 44,
-  fontFamily: "inherit",
-  fontWeight: 600,
-  width: "auto",
-};
+// Confirm + Cancel buttons inherit the canonical .link-btn / .btn-secondary
+// / .btn-destructive classes from globals.css so geometry, focus rings,
+// and hover/disabled states match every other dialog in the app.
 
 export type ConfirmDialogProps = {
   isOpen: boolean;
@@ -126,7 +101,7 @@ export function ConfirmDialog({
             ref={cancelRef}
             onClick={onCancel}
             disabled={busy}
-            style={SECONDARY}
+            className="btn-secondary"
             data-testid="confirm-cancel"
           >
             {cancelLabel}
@@ -135,11 +110,7 @@ export function ConfirmDialog({
             type="button"
             onClick={onConfirm}
             disabled={busy}
-            style={
-              variant === "destructive"
-                ? destructiveStyle(!busy)
-                : { ...SECONDARY, fontWeight: 700 }
-            }
+            className={variant === "destructive" ? "btn-destructive" : "link-btn"}
             data-testid="confirm-submit"
           >
             {busy ? "Working…" : confirmLabel}

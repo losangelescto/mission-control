@@ -138,3 +138,64 @@ def test_options_preflight_includes_idempotency_key_in_allow_headers() -> None:
     res = _preflight(client, request_headers="X-Idempotency-Key")
     headers = res.headers.get("access-control-allow-headers", "").lower()
     assert "x-idempotency-key" in headers
+
+
+# ─── OPTIONS catch-all: defense-in-depth against bare OPTIONS ───────────
+# Without an Origin header, CORSMiddleware does not intercept and the
+# request hits the route's method handler — which returns 405 because
+# the underlying route doesn't declare OPTIONS. The catch-all in
+# apps/api/app/main.py absorbs every such request and returns 200, so
+# probes and tools that don't speak CORS no longer see a misleading 405.
+
+def _client_with_real_app() -> TestClient:
+    """Build a TestClient against the real app factory so we exercise the
+    OPTIONS catch-all route registered in main.create_app."""
+    from app.main import create_app
+
+    return TestClient(create_app())
+
+
+def test_options_without_origin_returns_200_at_root_path() -> None:
+    client = _client_with_real_app()
+    res = client.options("/")
+    assert res.status_code == 200, (
+        f"OPTIONS without Origin should be 200; got {res.status_code} "
+        "— catch-all not registered or being shadowed"
+    )
+
+
+def test_options_without_origin_returns_200_at_tasks_endpoint() -> None:
+    client = _client_with_real_app()
+    res = client.options("/tasks")
+    assert res.status_code == 200
+
+
+def test_options_without_origin_returns_200_at_dynamic_path() -> None:
+    client = _client_with_real_app()
+    res = client.options("/tasks/123/recommendation")
+    assert res.status_code == 200
+
+
+def test_options_without_origin_returns_200_at_arbitrary_path() -> None:
+    client = _client_with_real_app()
+    res = client.options("/some/path/that/does/not/exist")
+    assert res.status_code == 200
+
+
+def test_options_with_origin_still_routes_through_cors_middleware() -> None:
+    """The catch-all must NOT shadow CORSMiddleware's preflight handling.
+    With a configured Origin and Access-Control-Request-* headers, the
+    response must still carry the access-control-allow-* headers
+    CORSMiddleware injects."""
+    client = _client_with_real_app()
+    res = client.options(
+        "/tasks",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "Content-Type",
+        },
+    )
+    assert res.status_code == 200
+    assert res.headers.get("access-control-allow-origin") == "http://localhost:3000"
+    assert "POST" in res.headers.get("access-control-allow-methods", "")

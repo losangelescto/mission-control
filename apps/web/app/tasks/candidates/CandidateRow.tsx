@@ -9,24 +9,6 @@ import type { TaskCandidate } from "@/lib/api/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-const PRIMARY_BUTTON: React.CSSProperties = {
-  flexShrink: 0,
-  padding: "0.45rem 0.85rem",
-  height: "auto",
-  fontSize: "0.85rem",
-  fontWeight: 600,
-};
-
-const SECONDARY_BUTTON: React.CSSProperties = {
-  ...PRIMARY_BUTTON,
-  background: "transparent",
-  border: "1px solid var(--border-input)",
-  borderRadius: "var(--radius)",
-  color: "var(--text-secondary)",
-  cursor: "pointer",
-  fontFamily: "inherit",
-};
-
 function priorityColor(priority: string | null): string {
   switch ((priority ?? "").toLowerCase()) {
     case "high":
@@ -142,7 +124,6 @@ export function CandidateRow({ candidate }: { candidate: TaskCandidate }) {
               className="link-btn"
               onClick={() => setConfirmOpen("approve")}
               disabled={busy}
-              style={PRIMARY_BUTTON}
               data-testid={`candidate-approve-${candidate.id}`}
             >
               Approve
@@ -151,7 +132,7 @@ export function CandidateRow({ candidate }: { candidate: TaskCandidate }) {
               type="button"
               onClick={() => setConfirmOpen("dismiss")}
               disabled={busy}
-              style={SECONDARY_BUTTON}
+              className="btn-secondary"
               data-testid={`candidate-dismiss-${candidate.id}`}
             >
               Dismiss

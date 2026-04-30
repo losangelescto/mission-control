@@ -16,19 +16,6 @@ const SOURCE_TYPES: readonly SourceType[] = [
 
 const ACCEPT_EXTENSIONS = ".pdf,.txt,.md,.docx,.mp3,.mp4,.m4a,.wav,.ogg,.flac,.webm,.mov";
 
-const SECONDARY_BUTTON: React.CSSProperties = {
-  background: "transparent",
-  border: "1px solid var(--border-input)",
-  borderRadius: "var(--radius)",
-  color: "var(--text-secondary)",
-  cursor: "pointer",
-  padding: "0 1rem",
-  height: 46,
-  fontFamily: "inherit",
-  fontWeight: 600,
-  width: "auto",
-};
-
 export default function UploadSource() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -183,14 +170,22 @@ export default function UploadSource() {
             <span>Version label</span>
             <input name="version_label" type="text" placeholder="e.g. v3" />
           </label>
-          <label style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+          <label
+            style={{
+              display: "flex",
+              gap: "0.5rem",
+              alignItems: "center",
+              cursor: "pointer",
+              userSelect: "none",
+            }}
+          >
             <input
               name="is_active_canon_version"
               type="checkbox"
               value="true"
               checked={activate}
               onChange={(e) => setActivate(e.target.checked)}
-              style={{ width: "auto", height: "auto" }}
+              data-testid="activate-canon-checkbox"
             />
             <span className="small">Activate as the active canon version on upload</span>
           </label>
@@ -215,7 +210,7 @@ export default function UploadSource() {
             setChosenName("");
           }}
           disabled={busy}
-          style={SECONDARY_BUTTON}
+          className="btn-secondary"
         >
           Cancel
         </button>

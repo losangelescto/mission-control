@@ -101,35 +101,87 @@ def _seed_canon_versions(db: Session, *, doc_id: str) -> tuple[SourceDocument, S
     return prev, new
 
 
-def test_change_summary_prompt_includes_both_versions_and_no_deletion_instruction() -> None:
-    """Pin the prompt structure: both v1 and v2 contents are present with
-    explicit labels, and the explicit "do not call v2 deleted" instruction
-    is included."""
+def test_change_summary_prompt_includes_both_versions_and_explicit_length_headers() -> None:
+    """Pin the new prompt structure (postfix7 round 2):
+    - Both v1 and v2 full bodies present, in triple-quoted blocks
+    - Each body preceded by an explicit character-count header
+    - The "VERSION 2 IS NON-EMPTY" assertion appears when v2 has content
+    - The unified diff is intentionally NOT included
+    - System prompt carries the deletion-language guard
+    """
     from app.canon_context import (
         build_canon_change_system_prompt,
         build_canon_change_user_message,
     )
 
+    v1 = "Vendors must respond within 24 hours."
+    v2 = "Vendors must respond within 4 hours during business, 24 outside. Document each interaction with timestamp and outcome."
+
     system_prompt = build_canon_change_system_prompt(canon_doc_label="vendor-onboarding")
     user_message = build_canon_change_user_message(
-        diff_text="-old line\n+new line",
         active_task_titles=["Onboard new vendor"],
-        previous_text="VERSION 1: original vendor onboarding policy.",
-        new_text="VERSION 2: revised vendor onboarding policy with stricter timelines.",
+        previous_text=v1,
+        new_text=v2,
     )
 
-    # System prompt carries the explicit guard.
-    assert "NEVER describe VERSION 2" in system_prompt
+    # System-level guard
+    assert "MODIFICATION" in system_prompt
     assert '"deleted"' in system_prompt
     assert '"empty"' in system_prompt
-    assert "MODIFICATION" in system_prompt
+    assert "NEVER use the words" in system_prompt
 
-    # User message labels both versions and includes both bodies.
+    # Both full bodies present
     assert "VERSION 1 (PREVIOUS)" in user_message
     assert "VERSION 2 (CURRENT)" in user_message
-    assert "original vendor onboarding policy" in user_message
-    assert "revised vendor onboarding policy with stricter timelines" in user_message
-    assert "Unified diff" in user_message
+    assert v1 in user_message
+    assert v2 in user_message
+
+    # Explicit length headers
+    assert f"VERSION 1 (PREVIOUS) contains: {len(v1)} characters" in user_message
+    assert f"VERSION 2 (CURRENT) contains: {len(v2)} characters" in user_message
+
+    # Non-empty assertion line
+    assert "VERSION 2 IS NON-EMPTY" in user_message
+    assert "Do NOT describe it as removed, deleted, empty, or cleared" in user_message
+
+    # Unified diff intentionally absent
+    assert "Unified diff" not in user_message
+    assert "@@ " not in user_message  # diff hunk marker
+
+
+def test_change_summary_prompt_marks_v2_empty_when_v2_actually_empty() -> None:
+    """When v2 IS empty, the prompt must label it as such so the LLM is
+    free to describe the change as a removal."""
+    from app.canon_context import build_canon_change_user_message
+
+    v1 = "Original policy."
+    user_message = build_canon_change_user_message(
+        active_task_titles=[],
+        previous_text=v1,
+        new_text="",
+    )
+    assert "VERSION 2 (CURRENT) contains: EMPTY" in user_message
+    assert "VERSION 2 IS EMPTY" in user_message
+    assert "[empty]" in user_message
+
+
+def test_change_summary_prompt_truncates_long_v2_inside_quote_block() -> None:
+    """Truncation marker must sit INSIDE the triple-quoted block so the
+    LLM cannot mistake it for the end of the document."""
+    from app.canon_context import _CANON_TEXT_PREVIEW_MAX, build_canon_change_user_message
+
+    long_text = "a" * (_CANON_TEXT_PREVIEW_MAX + 500)
+    user_message = build_canon_change_user_message(
+        active_task_titles=[],
+        previous_text="short",
+        new_text=long_text,
+    )
+    # Length header still reports the FULL char count, not the preview budget
+    assert f"contains: {len(long_text)} characters" in user_message
+    # Truncation marker is inside the quoted block (between `"""` lines)
+    assert "document continues" in user_message
+    # The marker explicitly tells the model the full document is in force
+    assert "the full document is in force" in user_message
 
 
 def test_change_summary_post_processing_logs_warning_on_deletion_language(
@@ -169,13 +221,15 @@ def test_change_summary_post_processing_logs_warning_on_deletion_language(
 
     misleading = [
         r for r in caplog.records
-        if r.message == "canon_change_summary uses deletion language while v2 has content"
+        if r.message == "canon_change_summary_hallucination_detected"
     ]
-    assert len(misleading) == 1, "expected exactly one warning about deletion language"
-    ctx = (misleading[0].__dict__.get("context") or {}) if not isinstance(
-        misleading[0].__dict__.get("context"), dict
-    ) else misleading[0].__dict__["context"]
-    assert ctx.get("matched_tokens") and "deleted" in ctx["matched_tokens"]
+    assert len(misleading) == 1, "expected exactly one hallucination-detected warning"
+    ctx = misleading[0].__dict__.get("context") or {}
+    assert ctx.get("matched_phrases"), (
+        f"expected matched_phrases in log context; got {ctx}"
+    )
+    # The phrase "version 2 was deleted" should be one of the matches
+    assert any("version 2 was deleted" in p for p in ctx["matched_phrases"])
     db.close()
 
 
@@ -228,7 +282,7 @@ def test_change_summary_no_warning_when_v2_genuinely_empty(
 
     misleading = [
         r for r in caplog.records
-        if r.message == "canon_change_summary uses deletion language while v2 has content"
+        if r.message == "canon_change_summary_hallucination_detected"
     ]
     assert len(misleading) == 0, (
         "guardrail fired even though v2 is genuinely empty — false positive"

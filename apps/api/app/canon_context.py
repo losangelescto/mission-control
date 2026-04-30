@@ -401,17 +401,27 @@ Output schema — return a JSON object with EXACTLY one key:
 _CANON_CHANGE_INSTRUCTIONS = """CANON-CHANGE ANALYSIS MODE INSTRUCTIONS:
 
 You will be given two versions of a canon document — VERSION 1 (PREVIOUS) and \
-VERSION 2 (CURRENT, just activated) — plus a unified diff and the list of \
-currently-active tasks. Your job is to explain — concretely — what operators \
-should re-check.
+VERSION 2 (CURRENT, just activated) — both presented IN FULL inside triple-quoted \
+blocks. The user message will state explicit character counts for each version \
+right above the text.
 
-VERSION 2 has different content from VERSION 1 but is NOT empty. Describe the \
-change as a MODIFICATION between two valid policies. NEVER describe VERSION 2 \
-as "deleted", "removed", "empty", "cleared", or "missing" unless VERSION 2 \
-literally contains no text. The diff format may show deletion+insertion blocks; \
-read those as one substitution, not as a removal.
+CRITICAL — your change_summary MUST satisfy these rules:
 
-Focus on what VERSION 2 ADDS, REMOVES, or CHANGES relative to VERSION 1. \
+1. If VERSION 2 contains ANY non-whitespace text (the character count above the \
+text will be > 0), VERSION 2 is a SUBSTANTIVE REPLACEMENT POLICY. Treat the \
+change as a MODIFICATION between two valid policies. NEVER use the words \
+"deleted", "removed", "empty", "cleared", "missing", or "no longer exists" to \
+describe VERSION 2 in this case. NEVER write "the policy has been removed" or \
+"VERSION 2 is empty" or any equivalent phrasing.
+
+2. Only when VERSION 2's character count is exactly 0 (or the body is literally \
+whitespace) may you describe it as empty/removed.
+
+3. When both versions have content, describe what changed by reading both bodies. \
+Focus on what VERSION 2 ADDS, REMOVES (relative to v1's wording), or TIGHTENS / \
+LOOSENS. If you cannot tell what changed because both bodies look unrelated, \
+say "the policy was rewritten" — never "deleted".
+
 Do NOT say "review your tasks". Name the actual change in the canon, then name \
 which kinds of in-flight work are most likely to be out-of-date because of it.
 
@@ -517,42 +527,79 @@ def build_canon_change_system_prompt(*, canon_doc_label: str) -> str:
     )
 
 
-_CANON_TEXT_PREVIEW_MAX = 4000
+_CANON_TEXT_PREVIEW_MAX = 6000
 
 
-def _preview_canon_text(text: str, label: str) -> str:
-    """Trim a canon body for the LLM prompt while keeping enough signal to
-    describe modifications. Truncation is honest — we mark it explicitly so
-    the LLM doesn't infer "the rest was deleted"."""
-    body = text or ""
-    if not body.strip():
-        return f"{label} (EMPTY DOCUMENT)"
-    if len(body) <= _CANON_TEXT_PREVIEW_MAX:
-        return f"{label}:\n{body}"
+def _preview_canon_block(text: str, label: str) -> str:
+    """Render one canon version inside a triple-quoted block prefixed by an
+    explicit character count. The count line is the LLM's anchor for the
+    "is v2 empty?" question — keep it adjacent to the body and unambiguous.
+
+    Long bodies are truncated; the truncation marker is INSIDE the quoted
+    block so the LLM cannot mistake the truncation for the document ending.
+    """
+    body = (text or "").strip()
+    char_count = len(body)
+    status = (
+        "EMPTY (zero non-whitespace characters)"
+        if char_count == 0
+        else f"{char_count} characters of substantive replacement policy text"
+    )
+    if char_count == 0:
+        body_block = "[empty]"
+    elif char_count <= _CANON_TEXT_PREVIEW_MAX:
+        body_block = body
+    else:
+        body_block = (
+            f"{body[:_CANON_TEXT_PREVIEW_MAX]}\n"
+            f"…[document continues — first {_CANON_TEXT_PREVIEW_MAX} of {char_count} chars shown; "
+            "the full document is in force on the system]"
+        )
     return (
-        f"{label} (first {_CANON_TEXT_PREVIEW_MAX} chars of {len(body)}):\n"
-        f"{body[:_CANON_TEXT_PREVIEW_MAX]}\n…(truncated for prompt budget; full document still in force)"
+        f"{label} contains: {status}\n"
+        f"{label} FULL TEXT:\n"
+        '"""\n'
+        f"{body_block}\n"
+        '"""'
     )
 
 
 def build_canon_change_user_message(
     *,
-    diff_text: str,
+    diff_text: str = "",  # noqa: ARG001 — kept for backward-compat; intentionally unused
     active_task_titles: Sequence[str],
     previous_text: str = "",
     new_text: str = "",
 ) -> str:
+    """Build the change-summary user message.
+
+    The unified diff is intentionally NOT included. In testing the diff's
+    "+/-" line format anchored the model on "things were deleted" even
+    when the new version was a substantive replacement. Passing both full
+    versions with explicit character-count headers and triple-quoted
+    bodies forces the model to read the actual text and reason about
+    modifications.
+    """
     titles_block = "\n".join(f"- {t}" for t in active_task_titles) or "(none)"
-    previous_block = _preview_canon_text(previous_text, "VERSION 1 (PREVIOUS)")
-    new_block = _preview_canon_text(new_text, "VERSION 2 (CURRENT)")
+    v1_block = _preview_canon_block(previous_text, "VERSION 1 (PREVIOUS)")
+    v2_block = _preview_canon_block(new_text, "VERSION 2 (CURRENT)")
+    v2_chars = len((new_text or "").strip())
+    v2_state_line = (
+        "VERSION 2 IS EMPTY — describing it as removed/deleted is accurate."
+        if v2_chars == 0
+        else (
+            "VERSION 2 IS NON-EMPTY and contains a substantive replacement policy. "
+            "Do NOT describe it as removed, deleted, empty, or cleared."
+        )
+    )
     return (
-        f"{previous_block}\n\n"
-        f"{new_block}\n\n"
-        "Unified diff between the two versions:\n\n"
-        f"{diff_text or '(no textual diff produced)'}\n\n"
+        f"{v1_block}\n\n"
+        f"{v2_block}\n\n"
+        f"FACT FOR YOUR SUMMARY: {v2_state_line}\n\n"
         "Currently-active task titles:\n"
         f"{titles_block}\n\n"
-        "Produce the canon-change-analysis JSON now."
+        "Produce the canon-change-analysis JSON now. Read both VERSION 1 and "
+        "VERSION 2 carefully and describe how VERSION 2 modifies the policy."
     )
 
 

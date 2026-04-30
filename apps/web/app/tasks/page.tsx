@@ -65,8 +65,14 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
         : "Could not load tasks. Is the API running (see NEXT_PUBLIC_API_URL)?";
   }
 
-  const selectedFromQuery = parsePositiveIntParam(params.selected);
-  const selectedId = selectedFromQuery ?? tasks[0]?.id;
+  // Only honour an explicit ?selected= in the URL. The previous auto-pick
+  // (selectedFromQuery ?? tasks[0]?.id) caused a transient detail-panel
+  // desync after deletes: the user lands on /tasks with no selection, but
+  // the page silently picks tasks[0] and renders its detail with state
+  // the user did not request — briefly showing wrong status badges
+  // alongside the freshly-fetched list. Now an empty selection means
+  // empty detail panel, period.
+  const selectedId = parsePositiveIntParam(params.selected);
   const selectedTask = selectedId
     ? await apiClient.getTask(selectedId).catch(() => null)
     : null;

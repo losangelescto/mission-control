@@ -206,7 +206,14 @@ def build_standard_system_prompt(
     active_obstacles: Sequence[dict] | None = None,
     resolved_obstacles: Sequence[dict] | None = None,
 ) -> str:
-    """Return the full system prompt for a standard recommendation call."""
+    """Return the full system prompt for a standard recommendation call.
+
+    Section order is deliberate: the "live operational state" cluster
+    (current blocker → active obstacles → recently resolved obstacles)
+    sits next to updates so the LLM treats resolutions as continuity
+    context, not appendix data. Reviews/history/subtasks follow as
+    supporting structure.
+    """
     sections = [
         _SHARED_VOICE,
         _STANDARD_INSTRUCTIONS,
@@ -214,11 +221,11 @@ def build_standard_system_prompt(
         _format_retrieved_chunks(canon_chunks),
         _format_updates(updates),
         _format_blocker(blocker),
+        format_active_obstacles(active_obstacles or []),
+        format_resolved_obstacles(resolved_obstacles or []),
         _format_reviews(reviews),
         _format_history_summary(history_summary),
         format_subtask_progress(subtasks or []),
-        format_active_obstacles(active_obstacles or []),
-        format_resolved_obstacles(resolved_obstacles or []),
     ]
     return "\n\n---\n\n".join(s for s in sections if s)
 
@@ -254,7 +261,12 @@ def build_unblock_system_prompt(
     active_obstacles: Sequence[dict] | None = None,
     resolved_obstacles: Sequence[dict] | None = None,
 ) -> str:
-    """Return the full system prompt for an unblock-mode call."""
+    """Return the full system prompt for an unblock-mode call.
+
+    Same live-operational-state ordering as standard mode so the
+    unblock alternatives can build on (or distinguish from) recently
+    resolved obstacles.
+    """
     sections = [
         _SHARED_VOICE,
         _UNBLOCK_INSTRUCTIONS,
@@ -262,11 +274,11 @@ def build_unblock_system_prompt(
         _format_retrieved_chunks(canon_chunks),
         _format_updates(updates),
         _format_blocker(blocker),
+        format_active_obstacles(active_obstacles or []),
+        format_resolved_obstacles(resolved_obstacles or []),
         _format_reviews(reviews),
         _format_history_summary(history_summary),
         format_subtask_progress(subtasks or []),
-        format_active_obstacles(active_obstacles or []),
-        format_resolved_obstacles(resolved_obstacles or []),
     ]
     return "\n\n---\n\n".join(s for s in sections if s)
 
@@ -573,6 +585,14 @@ def format_active_obstacles(obstacles: Sequence[dict]) -> str:
     return "\n".join(lines)
 
 
+RESOLUTION_CITATION_INSTRUCTION = (
+    "When reasoning about next actions, reference recent resolutions explicitly when "
+    "they're relevant to the current task state — the resident or team should see "
+    "continuity between problems already solved and what comes next. Quote or paraphrase "
+    "the resolution narrative below when it changes how you'd plan the next move."
+)
+
+
 def format_resolved_obstacles(obstacles: Sequence[dict]) -> str:
     """Format recently-resolved obstacles so the LLM can build on what just got unstuck.
 
@@ -583,9 +603,13 @@ def format_resolved_obstacles(obstacles: Sequence[dict]) -> str:
     """
     if not obstacles:
         return ""
-    lines = [f"Recently resolved obstacles ({len(obstacles)}):"]
-    for o in obstacles:
-        desc = (o.get("description") or "").strip()
+    lines = [
+        "Recently resolved obstacles (cite the resolution narrative when planning, "
+        "especially the resolution_notes — these are recent wins the resident/team "
+        "has already delivered):",
+    ]
+    for i, o in enumerate(obstacles, start=1):
+        desc = (o.get("description") or "").strip() or "(no description)"
         impact = (o.get("impact") or "").strip()
         notes = (o.get("resolution_notes") or "").strip()
         ago_days = o.get("resolved_ago_days")
@@ -594,15 +618,14 @@ def format_resolved_obstacles(obstacles: Sequence[dict]) -> str:
             if isinstance(ago_days, int)
             else "recently resolved"
         )
-        lines.append(f"  - [{ago_label}] {desc}")
+        lines.append(f"{i}. Obstacle: {desc}")
         if impact:
-            lines.append(f"      impact: {impact}")
-        if notes:
-            lines.append(f"      resolution: {notes}")
-    lines.append(
-        "Build on these resolutions — do NOT propose paths that were just tried "
-        "unless explicitly extending them."
-    )
+            lines.append(f"   Impact: {impact}")
+        lines.append(
+            f"   How it was resolved: {notes if notes else '(no resolution notes recorded)'}"
+        )
+        lines.append(f"   Resolved: {ago_label}")
+    lines.append(RESOLUTION_CITATION_INSTRUCTION)
     return "\n".join(lines)
 
 

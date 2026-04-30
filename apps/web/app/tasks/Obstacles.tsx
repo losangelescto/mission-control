@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { PromptDialog } from "@/app/components/PromptDialog";
 import { TimeDisplay } from "@/app/components/TimeDisplay";
 import { Obstacle } from "@/lib/api/types";
 
@@ -20,6 +21,7 @@ export function Obstacles({ taskId, initialObstacles }: Props) {
   const [newDescription, setNewDescription] = useState("");
   const [newImpact, setNewImpact] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [resolving, setResolving] = useState<Obstacle | null>(null);
 
   const active = obstacles.filter((o) => o.status === "active");
   const resolved = obstacles.filter((o) => o.status === "resolved");
@@ -65,24 +67,20 @@ export function Obstacles({ taskId, initialObstacles }: Props) {
     }
   }
 
-  async function resolve(o: Obstacle) {
-    const notes = window.prompt(
-      "How was this resolved? (required — used as audit trail)",
-      "",
-    );
-    if (notes === null) return;
-    const trimmed = notes.trim();
-    if (!trimmed) return;
+  async function confirmResolve(notes: string) {
+    const o = resolving;
+    if (!o) return;
     setBusy(`resolve-${o.id}`);
     try {
       const res = await fetch(`${API_BASE_URL}/obstacles/${o.id}/resolve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resolution_notes: trimmed }),
+        body: JSON.stringify({ resolution_notes: notes }),
       });
       if (res.ok) {
         const updated: Obstacle = await res.json();
         setObstacles((prev) => prev.map((x) => (x.id === o.id ? updated : x)));
+        setResolving(null);
         router.refresh();
       }
     } finally {
@@ -168,7 +166,7 @@ export function Obstacles({ taskId, initialObstacles }: Props) {
               </button>
               <button
                 type="button"
-                onClick={() => resolve(o)}
+                onClick={() => setResolving(o)}
                 disabled={busy !== null}
                 style={{
                   background: "transparent",
@@ -240,6 +238,33 @@ export function Obstacles({ taskId, initialObstacles }: Props) {
           {resolved.map(renderResolved)}
         </ul>
       )}
+
+      <PromptDialog
+        isOpen={resolving !== null}
+        title="Resolve obstacle"
+        body={
+          resolving ? (
+            <>
+              <div>
+                <strong>Obstacle:</strong> {resolving.description}
+              </div>
+              {resolving.impact ? (
+                <div style={{ marginTop: "0.25rem" }}>
+                  <strong>Impact:</strong> {resolving.impact}
+                </div>
+              ) : null}
+            </>
+          ) : null
+        }
+        fieldLabel="How was this resolved?"
+        fieldPlaceholder="Describe what changed and how this is no longer blocking. The recommendation engine quotes this when planning the next step."
+        fieldRequired
+        confirmLabel="Mark resolved"
+        cancelLabel="Cancel"
+        busy={resolving !== null && busy === `resolve-${resolving.id}`}
+        onConfirm={confirmResolve}
+        onCancel={() => setResolving(null)}
+      />
 
       {addOpen ? (
         <form onSubmit={addObstacle} className="stack-sm">

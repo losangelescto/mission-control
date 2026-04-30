@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { ConfirmDialog } from "@/app/components/ConfirmDialog";
 import { SubTask, SubTaskDraft } from "@/lib/api/types";
 import { pickSelectedDrafts, toggleIndex } from "@/lib/subtask-drafts";
 
@@ -31,6 +32,7 @@ export function SubTasks({ taskId, initialSubTasks }: Props) {
     () => new Set(),
   );
   const [busy, setBusy] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<SubTask | null>(null);
 
   const completed = subTasks.filter((s) => s.status === "completed").length;
   const total = subTasks.length;
@@ -53,12 +55,14 @@ export function SubTasks({ taskId, initialSubTasks }: Props) {
     }
   }
 
-  async function removeSubTask(s: SubTask) {
-    if (!confirm(`Delete sub-task "${s.title}"?`)) return;
+  async function confirmRemoveSubTask() {
+    const s = pendingDelete;
+    if (!s) return;
     setBusy(`delete-${s.id}`);
     try {
       await fetch(`${API_BASE_URL}/subtasks/${s.id}`, { method: "DELETE" });
       setSubTasks((prev) => prev.filter((x) => x.id !== s.id));
+      setPendingDelete(null);
     } finally {
       setBusy(null);
     }
@@ -190,7 +194,7 @@ export function SubTasks({ taskId, initialSubTasks }: Props) {
                 </div>
                 <button
                   type="button"
-                  onClick={() => removeSubTask(s)}
+                  onClick={() => setPendingDelete(s)}
                   disabled={busy === `delete-${s.id}`}
                   style={{
                     flexShrink: 0,
@@ -386,6 +390,21 @@ export function SubTasks({ taskId, initialSubTasks }: Props) {
           </button>
         </div>
       )}
+      <ConfirmDialog
+        isOpen={pendingDelete !== null}
+        title="Delete sub-task?"
+        body={
+          pendingDelete ? (
+            <>Delete <strong>{pendingDelete.title}</strong>? This cannot be undone.</>
+          ) : null
+        }
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="destructive"
+        busy={pendingDelete !== null && busy === `delete-${pendingDelete.id}`}
+        onConfirm={confirmRemoveSubTask}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 }

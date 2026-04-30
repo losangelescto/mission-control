@@ -376,3 +376,52 @@ def test_recommendation_api_response_includes_resolved_obstacles_count() -> None
     )
 
     app.dependency_overrides.clear()
+
+
+def test_recommendation_prompt_includes_resolution_citation_instruction() -> None:
+    """The prompt body must include both the resolution_notes substring AND
+    the explicit citation instruction so the LLM knows to reference recent
+    wins by name. Pin both so a future prompt rewrite cannot silently drop
+    either piece.
+    """
+    from app.canon_context import (
+        RESOLUTION_CITATION_INSTRUCTION,
+        build_standard_system_prompt,
+    )
+
+    resolved = [
+        {
+            "id": 1,
+            "description": "Camera footage missing for week 1",
+            "impact": "Cannot identify perpetrator",
+            "resolution_notes": "Recovered footage from cloud backup via vendor support",
+            "resolved_ago_days": 2,
+        },
+    ]
+    prompt = build_standard_system_prompt(
+        canon_chunks=[],
+        updates=[],
+        blocker=None,
+        reviews=[],
+        history_summary=None,
+        subtasks=[],
+        active_obstacles=[],
+        resolved_obstacles=resolved,
+    )
+
+    assert "Recently resolved obstacles" in prompt
+    assert "How it was resolved: Recovered footage from cloud backup via vendor support" in prompt
+    assert RESOLUTION_CITATION_INSTRUCTION in prompt
+
+    # Resolved-obstacle block must sit in the live-state cluster, BEFORE
+    # the supporting structure (reviews, history, sub-tasks). If the
+    # builder is reshuffled in the future we want this to fail loudly.
+    resolved_idx = prompt.index("Recently resolved obstacles")
+    history_idx = prompt.index("Task history summary") if "Task history summary" in prompt else len(prompt)
+    review_idx = (
+        prompt.index("Recent review sessions") if "Recent review sessions" in prompt else len(prompt)
+    )
+    earliest_supporting = min(history_idx, review_idx)
+    assert resolved_idx < earliest_supporting, (
+        "resolved-obstacle block leaked into the supporting-context tail"
+    )

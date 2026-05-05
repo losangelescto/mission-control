@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 import CanonChangesBadge from './CanonChangesBadge'
+import SuggestedTasksBadge from './SuggestedTasksBadge'
 
 const NAV_LINKS = [
   { href: '/dashboard',        label: 'Dashboard'      },
@@ -73,6 +74,7 @@ export function NavMenu() {
           >
             {label}
             {href === '/canon-changes' ? <CanonChangesBadge /> : null}
+            {href === '/tasks/candidates' ? <SuggestedTasksBadge /> : null}
           </Link>
         ))}
       </nav>

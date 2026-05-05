@@ -11,6 +11,7 @@ import { SubTasks } from "./SubTasks";
 import { Obstacles } from "./Obstacles";
 import ActivityLog from "./ActivityLog";
 import DeleteTaskButton from "./DeleteTaskButton";
+import GenerateRecommendationButton from "./GenerateRecommendationButton";
 
 type TasksPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -87,21 +88,15 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
       : [];
   const blockedSet = new Set(daily?.blocked.map((item) => item.task_id) ?? []);
 
-  // Default behaviour: show whatever recommendation already exists for this
-  // task — no LLM call on mount. Only when the user explicitly clicks
-  // "Generate Recommendation" (which sets ?generate_recommendation=1) do we
-  // POST a new one.
+  // Always read the latest persisted recommendation server-side; the
+  // GenerateRecommendationButton client component triggers fresh LLM
+  // calls and router.refresh()'s the page so the new rec lands here on
+  // the next render. The page never blocks on the LLM during SSR.
   let recommendation: Awaited<ReturnType<typeof apiClient.generateRecommendation>> | null = null;
   if (selectedTask) {
-    if (firstSearchParam(params.generate_recommendation) === "1") {
-      recommendation = await apiClient
-        .generateRecommendation(selectedTask.id)
-        .catch(() => null);
-    } else {
-      recommendation = await apiClient
-        .getLatestRecommendation(selectedTask.id)
-        .catch(() => null);
-    }
+    recommendation = await apiClient
+      .getLatestRecommendation(selectedTask.id)
+      .catch(() => null);
   }
 
   const recommendationHistory = selectedTask
@@ -274,12 +269,10 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
           >
             <h2 style={{ color: "var(--red)" }}>Unblock Analysis</h2>
             <div className="stack-sm">
-              <Link
-                className="link-btn"
-                href={`/tasks?selected=${selectedTask.id}&generate_recommendation=1`}
-              >
-                Regenerate Analysis
-              </Link>
+              <GenerateRecommendationButton
+                taskId={selectedTask.id}
+                label="Regenerate Analysis"
+              />
 
               <div className="small">
                 <strong>Blocker:</strong> {recommendation.unblock_analysis.blocker_summary}
@@ -329,12 +322,7 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
           <article className="panel">
             <h2>Recommendation</h2>
             <div className="stack-sm">
-              <Link
-                className="link-btn"
-                href={`/tasks?selected=${selectedTask.id}&generate_recommendation=1`}
-              >
-                Generate Recommendation
-              </Link>
+              <GenerateRecommendationButton taskId={selectedTask.id} />
               {recommendation ? (
                 <>
                   <div className="small">

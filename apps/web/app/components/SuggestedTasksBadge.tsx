@@ -4,22 +4,21 @@ import { useEffect, useState } from "react";
 
 import { apiClient } from "@/lib/api/client";
 
-// Poll every 10s so the nav reflects activation events that happened in
-// other tabs / via the API within one short demo beat. The endpoint is
-// cheap (small list + count) and the response is tiny, so the network
-// load is negligible.
+// Mirror of CanonChangesBadge so the nav surfaces pending candidate-review
+// counts at the same cadence. 10s strikes the balance between "feels live
+// in the demo" and "doesn't hammer the API".
 const POLL_INTERVAL_MS = 10_000;
 
-export default function CanonChangesBadge() {
+export default function SuggestedTasksBadge() {
   const [count, setCount] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        const list = await apiClient.getCanonChanges(true);
+        const candidates = await apiClient.getTaskCandidates("pending_review");
         if (cancelled) return;
-        setCount(list.unreviewed_count);
+        setCount(candidates.length);
       } catch {
         // Silent — the link still works without a badge.
       }
@@ -42,7 +41,7 @@ export default function CanonChangesBadge() {
         color: "#991b1b",
         fontSize: "0.7rem",
       }}
-      aria-label={`${count} unreviewed canon changes`}
+      aria-label={`${count} pending suggested tasks`}
     >
       {count}
     </span>

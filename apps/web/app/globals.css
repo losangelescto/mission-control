@@ -1088,3 +1088,8 @@ tbody tr:last-child td {
     height: 48px;
   }
 }
+
+/* Keyframes used by the inline SVG spinner inside loading buttons. */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

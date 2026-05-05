@@ -1,5 +1,13 @@
-/* Globals set appearance:none on all inputs; revert for native select + datetime-local. */
-.select,
+/* The global select rule (globals.css) sets appearance:none AND renders a
+   custom SVG chevron via background-image. Reverting appearance here used
+   to make sense — there was no custom chevron — but the revert now causes
+   a double-chevron: the native arrow renders alongside the SVG.
+   The .select class no longer overrides appearance, so filter selects
+   match every other select in the app (one chevron, from globals.css).
+
+   .datetime keeps reverting because the global input rule strips
+   appearance from <input type="date">, which hides the native calendar
+   picker icon. Date inputs need the OS-default UI to remain usable. */
 .datetime {
   appearance: revert;
   -webkit-appearance: revert;

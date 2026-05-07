@@ -994,11 +994,17 @@ input[type="radio"]:disabled {
    every select renders consistently across browsers. data: URL keeps this
    self-contained with no extra asset request. */
 select {
-  padding-right: 2rem;
-  /* Warm mid-tone gray — readable on cream (light) and warm-noir (dark) without theme-specific data URLs. */
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none' stroke='%238a8576' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1l4 4 4-4'/%3E%3C/svg%3E");
+  /* !important on padding-right so inline styles (e.g. ScopeSelector's
+     "padding: 0.25rem 0.5rem") can't crowd the chevron and produce the
+     overlap reported as staging bug 8. Other padding values still
+     compose with whatever inline style sets. */
+  padding-right: 32px !important;
+  /* Brass chevron — matches the rest of the v2 'Calm' interactive
+     palette. Encoded as a data URL so the SVG is self-contained with
+     no asset request. The %23 prefix is the URL-encoded '#'. */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none' stroke='%238a6e30' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1l4 4 4-4'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 0.875rem center;
+  background-position: right 12px center;
   background-size: 10px 6px;
 }
 

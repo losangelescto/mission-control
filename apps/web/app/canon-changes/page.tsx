@@ -49,7 +49,7 @@ export default async function CanonChangesPage({ searchParams }: PageProps) {
         : "All canon changes acknowledged.";
 
   return (
-    <div style={{ maxWidth: 880 }}>
+    <div>
       <PageTitle sub={subtitle}>Canon Changes</PageTitle>
 
       {list.events.length === 0 ? (

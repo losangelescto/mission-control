@@ -39,7 +39,7 @@ export default async function ReviewPage({ searchParams }: ReviewPageProps) {
   const owners = Array.from(new Set(tasks.map((t) => t.owner_name))).sort();
 
   return (
-    <div style={{ maxWidth: 880 }}>
+    <div>
       <PageTitle
         eyebrow="Daily Cadence"
         sub="A guided walk through everything that needs your attention. About ten minutes."
@@ -75,7 +75,7 @@ export default async function ReviewPage({ searchParams }: ReviewPageProps) {
           Where would you like to start?
         </h2>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div className="cadence-grid">
           {cadences.map((c, i) => (
             <CadenceChoice key={c.cadence} cadence={c} primary={i === 0} />
           ))}

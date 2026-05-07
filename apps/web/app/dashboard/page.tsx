@@ -26,7 +26,7 @@ export default async function DashboardPage() {
   });
 
   return (
-    <div style={{ maxWidth: 880 }}>
+    <div>
       <PageTitle sub={subtitle}>Today</PageTitle>
 
       <CalloutGroup title="Blocked"     tone="danger"  tasks={blocked} />

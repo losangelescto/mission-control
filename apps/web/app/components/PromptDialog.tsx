@@ -62,15 +62,22 @@ export function PromptDialog({
   const inputRef = useRef<HTMLTextAreaElement | HTMLInputElement | null>(null);
 
   // Reset state every time the dialog re-opens so a previously typed
-  // value doesn't leak across unrelated open events.
+  // value doesn't leak across unrelated open events. The setValue /
+  // setShowError calls are deferred through requestAnimationFrame so
+  // they don't cascade-render inside an effect body
+  // (react-hooks/set-state-in-effect).
   useEffect(() => {
-    if (isOpen) {
+    if (!isOpen) return;
+    const rafId = window.requestAnimationFrame(() => {
       setValue(initialValue);
       setShowError(false);
-      // Focus the input on the next paint so the autofocus actually lands.
-      const id = window.setTimeout(() => inputRef.current?.focus(), 0);
-      return () => window.clearTimeout(id);
-    }
+    });
+    // Focus the input on the next paint so the autofocus actually lands.
+    const focusId = window.setTimeout(() => inputRef.current?.focus(), 0);
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      window.clearTimeout(focusId);
+    };
   }, [isOpen, initialValue]);
 
   useEffect(() => {

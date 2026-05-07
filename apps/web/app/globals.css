@@ -361,6 +361,17 @@ h3 {
   background: var(--surface-raised);
 }
 
+/* Task list row — selected state owns the brass border via data-selected.
+   Unselected rows get a line-strong border on hover; selected rows stay
+   brass and the background lifts to surface-raised. */
+.task-list-row:not([data-selected="true"]):hover {
+  border-color: var(--line-strong);
+  background: var(--surface-raised);
+}
+.task-list-row[data-selected="true"]:hover {
+  background: var(--surface-raised);
+}
+
 /* ─── Theme toggle ───────────────────────────────────────── */
 
 .theme-toggle {

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Script from "next/script";
-import { JetBrains_Mono } from "next/font/google";
+import { JetBrains_Mono, Newsreader } from "next/font/google";
 import { NavMenu } from "./components/NavMenu";
 import SearchBar from "./components/SearchBar";
 import { ThemeToggle } from "./components/ThemeToggle";
@@ -11,6 +11,14 @@ const jetBrainsMono = JetBrains_Mono({
   variable: "--font-mono",
   subsets: ["latin"],
   display: "swap",
+});
+
+const newsreader = Newsreader({
+  variable: "--font-newsreader",
+  subsets: ["latin"],
+  display: "swap",
+  weight: ["300", "400", "500", "600"],
+  style: ["normal", "italic"],
 });
 
 export const metadata: Metadata = {
@@ -24,18 +32,23 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={jetBrainsMono.variable} suppressHydrationWarning>
+    <html
+      lang="en"
+      data-theme="light"
+      className={`${jetBrainsMono.variable} ${newsreader.variable}`}
+      suppressHydrationWarning
+    >
       <body>
         {/*
-          Blocking script injected into <head> via beforeInteractive.
-          Adds the `dark` class before first paint — zero flash of wrong theme.
-          Light is the default; only add dark when user has explicitly saved "dark".
+          Blocking script injected via beforeInteractive. Reads the saved theme
+          from localStorage and sets data-theme on <html> before first paint, so
+          the cascade picks the right token block and there's no FOUC.
         */}
         <Script
           id="theme-init"
           strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
-            __html: `try{var t=localStorage.getItem('mc-theme');if(t==='dark')document.documentElement.classList.add('dark');}catch(e){}`,
+            __html: `try{var t=localStorage.getItem('mc.theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}`,
           }}
         />
 

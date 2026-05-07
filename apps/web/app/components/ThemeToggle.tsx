@@ -4,10 +4,12 @@ import { useEffect, useState } from 'react'
 
 type ThemeStorageValue = 'dark' | 'light'
 
-export function isDarkClassPresent(documentElement: {
-  classList: { contains: (token: string) => boolean }
+export const THEME_STORAGE_KEY = 'mc.theme'
+
+export function isDarkThemeAttr(documentElement: {
+  getAttribute: (name: string) => string | null
 }) {
-  return documentElement.classList.contains('dark')
+  return documentElement.getAttribute('data-theme') === 'dark'
 }
 
 export function getThemeStorageValue(isDark: boolean): ThemeStorageValue {
@@ -41,15 +43,15 @@ export function ThemeToggle() {
     // Avoid calling setState synchronously inside an effect body (eslint rule).
     const rafId = window.requestAnimationFrame(() => {
       setMounted(true)
-      setIsDark(isDarkClassPresent(document.documentElement))
+      setIsDark(isDarkThemeAttr(document.documentElement))
     })
     return () => window.cancelAnimationFrame(rafId)
   }, [])
 
   function toggle() {
     const next = !isDark
-    document.documentElement.classList.toggle('dark', next)
-    try { localStorage.setItem('mc-theme', getThemeStorageValue(next)) } catch { /* noop */ }
+    document.documentElement.setAttribute('data-theme', next ? 'dark' : 'light')
+    try { localStorage.setItem(THEME_STORAGE_KEY, getThemeStorageValue(next)) } catch { /* noop */ }
     setIsDark(next)
   }
 

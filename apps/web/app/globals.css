@@ -1,112 +1,101 @@
 /* ═══════════════════════════════════════════════════════════
-   MISSION CONTROL — ELEGANT OPERATIONAL THEME
-   Light-first. Readable. System font stack.
+   MISSION CONTROL — v2 'CALM' DESIGN TOKENS
+   Light-first. Warm metallics, natural stones, deep neutrals.
+   No pure white, no pure black. Newsreader serif for editorial accents.
    ═══════════════════════════════════════════════════════════ */
 
-/* ─── Font stacks ───────────────────────────────────────── */
+/* ─── Theme-independent: fonts, radii, shadows ──────────── */
 :root {
   --font-heading: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-body:    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-}
+  --serif:        var(--font-newsreader), Georgia, "Times New Roman", serif;
 
-/* ─── Light theme base ───────────────────────────────────── */
-:root {
-  color-scheme: light;
-
-  /* Surfaces */
-  --canvas:     #FFFFFF;
-  --surface:  #F8F8F8;
-  --surface-raised: #F8F8F8;
-  --surface-inset:    #F8F8F8;
-  --bg-hover:    rgba(0, 0, 0, 0.03);
-
-  /* Text */
-  --ink:   #1A1A1A;
-  --ink-soft: #4A4A4A;
-  --ink-faint:  #6A6A6A;
-
-  /* Borders */
-  --line:       #E0E0E0;
-  --line-strong: #D0D0D0;
-  --border-input: #D0D0D0;
-
-  /* Navigation */
-  --topbar-bg:     #FFFFFF;
-  --topbar-border: #E0E0E0;
-
-  /* Semantic — light (slightly darkened for contrast on white) */
-  --brass:        #16A34A;
-  --green-hover:  #17B84F;
-  --green-active: #138040;
-  --green-dim:    rgba(22, 163, 74, 0.10);
-  --danger:         #DC2626;
-  --red-dim:     rgba(220, 38, 38, 0.08);
-  --warning:      #CA8A04;
-  --yellow-dim:  rgba(202, 138, 4, 0.10);
-  --cyan:        #0891B2;
-  --cyan-dim:    rgba(8, 145, 178, 0.10);
-  --orange:      #EA580C;
-  --orange-dim:  rgba(234, 88, 12, 0.10);
-
-  /* Focus */
-  --focus-ring: 0 0 0 2px rgba(22, 163, 74, 0.30);
-
-  /* Shadows */
   --shadow:    0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.04);
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
 
-  /* Radius */
   --radius-xs: 4px;
   --radius-sm: 5px;
   --radius:    8px;
   --radius-lg: 10px;
 }
 
-/* ─── Dark theme override ────────────────────────────────── */
-html.dark {
+/* ─── Light theme — v2 'Calm' palette (default) ─────────── */
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --ink:            #1a1814;
+  --ink-soft:       #6b6358;
+  --ink-faint:      #9b9384;
+
+  --canvas:         #f3ede0;
+  --surface:        #faf6ec;
+  --surface-raised: #ffffff;
+  --surface-inset:  #ebe4d2;
+
+  --line:           #d6cdb6;
+  --line-strong:    #b3a78a;
+
+  --brass:          #8a6e30;
+  --brass-deep:     #5e4a1f;
+  --bronze:         #6a4f2a;
+
+  --danger:         #9a3f25;
+  --warning:        #8a6420;
+  --success:        #4a6a3e;
+}
+
+/* ─── Dark theme — v2 'Calm' palette (warm noir) ────────── */
+:root[data-theme="dark"] {
   color-scheme: dark;
 
-  /* Surfaces — layered, NOT flat black */
-  --canvas:     #111111;
-  --surface:  #1E1E1E;
-  --surface-raised: #252525;
-  --surface-inset:    #1E1E1E;
-  --bg-hover:    rgba(255, 255, 255, 0.04);
+  --ink:            #f1ead9;
+  --ink-soft:       #aaa18f;
+  --ink-faint:      #6b6458;
 
-  /* Text */
-  --ink:   #F0F0F0;
-  --ink-soft: #B0B0B0;
-  --ink-faint:  #888888;
+  --canvas:         #0e0d0b;
+  --surface:        #16151a;
+  --surface-raised: #1d1c22;
+  --surface-inset:  #0a0a0c;
 
-  /* Borders */
-  --line:        #333333;
-  --line-strong: #444444;
-  --border-input:  #3A3A3A;
+  --line:           #2a2830;
+  --line-strong:    #423f48;
 
-  /* Navigation */
-  --topbar-bg:     #1E1E1E;
-  --topbar-border: #333333;
+  --brass:          #c9a96b;
+  --brass-deep:     #8a7345;
+  --bronze:         #a08056;
 
-  /* Semantic — full saturation for dark backgrounds */
-  --brass:        #22C55E;
-  --green-hover:  #25D966;
-  --green-active: #1DB050;
-  --green-dim:    rgba(34, 197, 94, 0.14);
-  --danger:        #EF4444;
-  --red-dim:    rgba(239, 68, 68, 0.12);
-  --warning:     #EAB308;
-  --yellow-dim: rgba(234, 179, 8, 0.14);
-  --cyan:       #06B6D4;
-  --cyan-dim:   rgba(6, 182, 212, 0.14);
-  --orange:     #F97316;
-  --orange-dim: rgba(249, 115, 22, 0.14);
+  --danger:         #c5644a;
+  --warning:        #d4a04a;
+  --success:        #7a9b6e;
 
-  /* Focus — green glow */
-  --focus-ring: 0 0 0 2px rgba(34, 197, 94, 0.35);
-
-  /* Shadows — dark mode uses border+background, not traditional shadows */
+  /* Dark-mode shadow override — borders carry weight, not box-shadow */
   --shadow:    0 1px 0 rgba(255, 255, 255, 0.03);
   --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+/* ─── Legacy aliases — derived from v2 tokens ────────────
+   Tokens kept here so existing consumers continue to resolve.
+   A future cleanup PR will inline-rationalize them.            */
+:root {
+  --bg-hover:      color-mix(in oklch, var(--brass) 8%, transparent);
+  --border-input:  var(--line);
+  --topbar-bg:     var(--canvas);
+  --topbar-border: var(--line);
+
+  --green-hover:   color-mix(in oklch, var(--brass) 88%, white);
+  --green-active:  color-mix(in oklch, var(--brass) 78%, black);
+  --green-dim:     color-mix(in oklch, var(--brass) 14%, transparent);
+
+  --red-dim:       color-mix(in oklch, var(--danger) 14%, transparent);
+  --yellow-dim:    color-mix(in oklch, var(--warning) 14%, transparent);
+
+  --cyan:          var(--success);
+  --cyan-dim:      color-mix(in oklch, var(--success) 14%, transparent);
+  --orange:        var(--warning);
+  --orange-dim:    color-mix(in oklch, var(--warning) 14%, transparent);
+
+  --focus-ring:    0 0 0 2px color-mix(in oklch, var(--brass) 32%, transparent);
 }
 
 /* ─── Reset ──────────────────────────────────────────────── */
@@ -700,7 +689,7 @@ h3 {
 
 .link-btn:hover {
   background: var(--green-hover);
-  box-shadow: 0 0 12px rgba(34, 197, 94, 0.28);
+  box-shadow: 0 0 12px color-mix(in oklch, var(--brass) 32%, transparent);
 }
 
 .link-btn:active {
@@ -772,12 +761,12 @@ h3 {
 }
 
 .btn-destructive:hover {
-  background: #DC2626;
-  box-shadow: 0 0 12px rgba(239, 68, 68, 0.28);
+  background: color-mix(in oklch, var(--danger) 88%, black);
+  box-shadow: 0 0 12px color-mix(in oklch, var(--danger) 32%, transparent);
 }
 
 .btn-destructive:active {
-  background: #B91C1C;
+  background: color-mix(in oklch, var(--danger) 72%, black);
   box-shadow: none;
 }
 
@@ -855,7 +844,8 @@ input[type="radio"]:disabled {
    self-contained with no extra asset request. */
 select {
   padding-right: 2rem;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none' stroke='%236A6A6A' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1l4 4 4-4'/%3E%3C/svg%3E");
+  /* Warm mid-tone gray — readable on cream (light) and warm-noir (dark) without theme-specific data URLs. */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none' stroke='%238a8576' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1l4 4 4-4'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 0.875rem center;
   background-size: 10px 6px;

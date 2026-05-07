@@ -25,7 +25,7 @@ export default async function CandidatesPage() {
         : `${candidates.length} candidates awaiting your call. Approve to convert into a task, or dismiss.`;
 
   return (
-    <div style={{ maxWidth: 800 }}>
+    <div>
       <PageTitle sub={subtitle ?? "Task candidates auto-extracted from your uploaded sources. Approve to convert into a task, or dismiss."}>
         Suggested
       </PageTitle>

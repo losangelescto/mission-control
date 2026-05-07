@@ -350,6 +350,22 @@ h3 {
   background: var(--surface-raised);
 }
 
+/* Review page cadence grid — Daily / Weekly / Monthly / Quarterly / Ad Hoc.
+   5 cards across at >=1200px so they read as a horizontal scan band on
+   desktop. Gracefully collapses to 3 / 2 / 1 columns. Cards self-stretch
+   to equal height via the implicit grid stretch alignment. */
+.cadence-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 1199px) {
+  .cadence-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
 /* Long-string defense for user-supplied content. Task titles, source
    filenames, candidate descriptions, etc. can be no-space strings (e.g.
    D00_THE_UNCOMMON_PURSUIT_ECOSYSTEM_MAP_2026_03_17_V58.DOCX) that
@@ -969,6 +985,9 @@ tbody tr:last-child td {
   .metric-grid {
     grid-template-columns: 1fr !important;
   }
+  .cadence-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
   /* PageTitle h1 scales down on mobile to keep title + sub balanced inside
      the narrower main column. !important because the size lives in inline
      styles on the PageTitle h1. */
@@ -1036,6 +1055,9 @@ tbody tr:last-child td {
   }
   .stat-grid {
     grid-template-columns: 1fr !important;
+  }
+  .cadence-grid {
+    grid-template-columns: 1fr;
   }
   .page-title h1 {
     font-size: 28px !important;

@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+
+import { BigButton } from "@/app/components/BigButton";
 import { StandardScore } from "@/lib/api/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -96,16 +98,15 @@ export function ScoreEntry({
         value={assessment}
         onChange={(e) => { setAssessment(e.target.value); setSaved(false); }}
       />
-      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-        <button
-          className="link-btn"
-          onClick={save}
-          disabled={saving}
-          style={{ padding: "0.25rem 0.75rem", minHeight: "auto", fontSize: "0.8125rem" }}
-        >
-          {saving ? "Saving..." : "Save"}
-        </button>
-        {saved && <span className="small" style={{ color: "var(--brass)" }}>Saved</span>}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 4 }}>
+        <BigButton kind="secondary" onClick={save} disabled={saving}>
+          {saving ? "Saving…" : "Save"}
+        </BigButton>
+        {saved && (
+          <span style={{ fontSize: 13, color: "var(--success)", fontWeight: 500 }}>
+            Saved
+          </span>
+        )}
       </div>
     </div>
   );

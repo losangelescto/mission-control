@@ -1095,6 +1095,12 @@ tbody tr:last-child td {
   .main-content-pad {
     padding: 20px 18px 80px;
   }
+  .stat-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  .metric-grid {
+    grid-template-columns: 1fr !important;
+  }
 }
 
 /* Tablet: 768px */
@@ -1137,6 +1143,9 @@ tbody tr:last-child td {
   }
   .header-date {
     display: none;
+  }
+  .stat-grid {
+    grid-template-columns: 1fr !important;
   }
 }
 

@@ -1,10 +1,7 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import Script from "next/script";
 import { JetBrains_Mono, Newsreader } from "next/font/google";
-import { NavMenu } from "./components/NavMenu";
-import SearchBar from "./components/SearchBar";
-import { ThemeToggle } from "./components/ThemeToggle";
+import { AppShell } from "./components/AppShell";
 import "./globals.css";
 
 const jetBrainsMono = JetBrains_Mono({
@@ -52,19 +49,7 @@ export default function RootLayout({
           }}
         />
 
-        <header className="topbar">
-          <div className="topbar-inner">
-            <Link href="/" className="brand">
-              <span className="brand-mark">▸</span>
-              MISSION CONTROL
-            </Link>
-            <NavMenu />
-            <SearchBar />
-            <ThemeToggle />
-          </div>
-        </header>
-
-        <main className="page-container">{children}</main>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

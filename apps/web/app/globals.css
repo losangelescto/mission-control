@@ -168,142 +168,163 @@ h3 {
   line-height: 1.4;
 }
 
-/* ─── Navigation bar ─────────────────────────────────────── */
+/* ─── Selection & scrollbar — small v2 niceties ───────────
+   ::selection uses brass to keep highlights warm. Scrollbar is
+   themed with a "track behind, thumb on top" pattern so the page
+   never looks rebuilt by Chrome's default. */
 
-.topbar {
-  border-bottom: 1px solid var(--topbar-border);
-  background: var(--topbar-bg);
+::selection {
+  background: color-mix(in oklch, var(--brass) 35%, transparent);
+  color: var(--ink);
+}
+
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 6px;
+  border: 3px solid var(--canvas);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--line-strong); }
+
+/* ─── Editorial serif utility — Newsreader, opt-in ──────── */
+
+.serif {
+  font-family: var(--serif);
+}
+
+/* ─── App shell — sidebar + sticky header + main column ──
+   Per /ui-update/Mission Control v2 - Calm.html line 72+:
+   .shell is a 244px / 1fr grid, full-height. Drops to a single
+   column at 900px and the desktop sidebar is replaced by a
+   hamburger-triggered drawer. */
+
+.shell {
+  display: grid;
+  grid-template-columns: 244px 1fr;
+  min-height: 100vh;
+}
+
+.sidebar-desktop {
+  border-right: 1px solid var(--line);
+  background: var(--canvas);
+  padding: 24px 0 0;
+  display: flex;
+  flex-direction: column;
   position: sticky;
   top: 0;
-  z-index: 100;
-  transition: background-color 0.2s ease, border-color 0.2s ease;
+  height: 100vh;
+  overflow-y: auto;
 }
 
-.topbar-inner {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 0 1.5rem;
-  height: 56px;
+.shell-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Sticky desktop header — search + date */
+.header-pad {
   display: flex;
   align-items: center;
-  gap: 0;
+  gap: 14px;
+  padding: 14px 32px;
+  border-bottom: 1px solid var(--line);
+  background: var(--canvas);
+  position: sticky;
+  top: 0;
+  z-index: 30;
 }
 
-/* Brand */
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-family: var(--font-heading);
-  font-size: 0.8125rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  color: var(--ink);
-  text-transform: uppercase;
-  white-space: nowrap;
-  margin-right: 2rem;
-  flex-shrink: 0;
-}
-
-.brand-mark {
-  color: var(--brass);
-  font-size: 1rem;
-  line-height: 1;
-}
-
-/* Desktop nav links */
-.nav-desktop {
-  display: flex;
-  align-items: center;
-  flex: 1;
-}
-
-.nav-link {
-  display: flex;
-  align-items: center;
-  height: 56px;
-  padding: 0 1rem;
-  font-size: 0.9375rem;
-  font-weight: 500;
-  color: var(--ink-soft);
-  border-bottom: 2px solid transparent;
-  transition: color 0.15s ease, border-color 0.15s ease;
-  white-space: nowrap;
-}
-
-.nav-link:hover {
-  color: var(--ink);
-}
-
-.nav-link-active {
-  color: var(--ink);
-  border-bottom-color: var(--brass);
-}
-
-/* Hamburger button — hidden on desktop */
-.nav-hamburger {
+/* Mobile-only top bar — hamburger + brand + theme toggle */
+.topbar-mobile {
   display: none;
   align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: 1px solid var(--border-input);
-  border-radius: var(--radius);
-  background: transparent;
-  color: var(--ink-soft);
-  cursor: pointer;
-  flex-shrink: 0;
-  margin-left: auto;
-  margin-right: 0.5rem;
-  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+  gap: 12px;
+  padding: 14px 32px;
+  border-bottom: 1px solid var(--line);
+  background: var(--canvas);
 }
 
-.nav-hamburger:hover {
+.hamburger-btn {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  cursor: pointer;
   color: var(--ink);
+  flex-shrink: 0;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.hamburger-btn:hover {
+  color: var(--brass);
   border-color: var(--line-strong);
 }
 
-/* Mobile overlay */
-.nav-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  z-index: 200;
+/* Page content padding — generous on desktop, tighter on mobile */
+.main-content-pad {
+  padding: 40px 56px 80px;
 }
 
-/* Mobile drawer */
-.nav-drawer {
-  position: fixed;
-  top: 56px;
-  left: 0;
-  right: 0;
-  background: var(--surface);
-  border-bottom: 1px solid var(--line);
-  z-index: 201;
-  box-shadow: var(--shadow-md);
-}
-
-.nav-drawer-link {
+/* Sidebar nav links — vertical list with brass left-border on active */
+.shell-nav-link {
   display: flex;
   align-items: center;
-  height: 52px;
-  padding: 0 1.5rem;
-  font-size: 1rem;
-  font-weight: 500;
-  color: var(--ink-soft);
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 12px;
+  border: none;
   border-left: 2px solid transparent;
-  transition: color 0.15s ease, background-color 0.15s ease;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 15px;
+  font-weight: 400;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
 }
 
-.nav-drawer-link:hover {
+.shell-nav-link:hover {
   color: var(--ink);
-  background-color: var(--bg-hover);
+  background-color: color-mix(in oklch, var(--brass) 4%, transparent);
 }
 
-.nav-drawer-link-active {
+.shell-nav-link-active {
   color: var(--ink);
+  font-weight: 500;
+  background: var(--surface);
   border-left-color: var(--brass);
-  background-color: var(--bg-hover);
+}
+
+/* Mobile drawer — slides in from the left at 900px */
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 13, 10, 0.4);
+  backdrop-filter: blur(2px);
+  z-index: 40;
+}
+
+.drawer-panel {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(86vw, 320px);
+  background: var(--canvas);
+  border-right: 1px solid var(--line);
+  z-index: 41;
+  display: flex;
+  flex-direction: column;
+  padding: 24px 0 0;
+  animation: drawerIn 200ms ease-out;
+  overflow-y: auto;
 }
 
 /* ─── Theme toggle ───────────────────────────────────────── */
@@ -314,29 +335,19 @@ h3 {
   justify-content: center;
   width: 36px;
   height: 36px;
-  border: 1px solid var(--border-input);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: transparent;
   color: var(--ink-soft);
   cursor: pointer;
   flex-shrink: 0;
-  margin-left: 0.75rem;
   transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
 }
 
 .theme-toggle:hover {
   color: var(--brass);
   border-color: var(--brass);
-  background-color: var(--green-dim);
-}
-
-/* ─── Page layout ────────────────────────────────────────── */
-
-.page-container {
-  max-width: 1400px;
-  margin: 0 auto;
-  width: 100%;
-  padding: 1.5rem;
+  background-color: color-mix(in oklch, var(--brass) 8%, transparent);
 }
 
 /* ─── Panel / Card ───────────────────────────────────────── */
@@ -1008,18 +1019,41 @@ tbody tr:last-child td {
   border-radius: 2px;
 }
 
-/* ─── Responsive — mobile breakpoints ───────────────────── */
+/* ─── Responsive ──────────────────────────────────────────
+   Three breakpoints:
+   - 900px: shell switches from sidebar+main to single-column +
+     hamburger-triggered drawer.
+   - 768px: layout grids collapse, panels tighten, tables become scroll
+     containers.
+   - 560px: stat grids go single-column, header date hides.
+   - 480px: forms grow to 48px min-height for touch.                  */
+
+@media (max-width: 900px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+  .sidebar-desktop {
+    display: none;
+  }
+  .topbar-mobile {
+    display: flex;
+  }
+  .header-pad {
+    padding: 10px 16px;
+  }
+  .header-meta-extra {
+    display: none;
+  }
+  .search-shell {
+    max-width: none !important;
+  }
+  .main-content-pad {
+    padding: 20px 18px 80px;
+  }
+}
 
 /* Tablet: 768px */
 @media (max-width: 768px) {
-  /* Show hamburger, hide desktop nav */
-  .nav-desktop   { display: none; }
-  .nav-hamburger { display: flex; }
-
-  .page-container {
-    padding: 1rem 0.875rem;
-  }
-
   /* Stack all grids to single column */
   .grid.cols-2,
   .grid.cols-3 {
@@ -1049,6 +1083,18 @@ tbody tr:last-child td {
   }
 }
 
+@media (max-width: 560px) {
+  .header-pad {
+    padding: 8px 12px;
+  }
+  .main-content-pad {
+    padding: 16px 14px 60px;
+  }
+  .header-date {
+    display: none;
+  }
+}
+
 /* Small mobile: 480px */
 @media (max-width: 480px) {
   /* 2-column mini-grid for stat cards */
@@ -1058,11 +1104,6 @@ tbody tr:last-child td {
 
   .stat-count {
     font-size: 1.75rem;
-  }
-
-  .brand {
-    font-size: 0.6875rem;
-    letter-spacing: 0.1em;
   }
 
   /* Ensure min 48px touch targets */
@@ -1079,7 +1120,27 @@ tbody tr:last-child td {
   }
 }
 
-/* Keyframes used by the inline SVG spinner inside loading buttons. */
+/* ─── Keyframes ──────────────────────────────────────────── */
+
+/* Used by the inline SVG spinner inside loading buttons. */
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* v2 'breathing' opacity pulse — used by the recommendation loading state. */
+@keyframes breathe {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 1; }
+}
+
+/* Subtle fade + slide for newly-mounted content. */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Mobile drawer slide-in. */
+@keyframes drawerIn {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
 }

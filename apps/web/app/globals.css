@@ -327,6 +327,40 @@ h3 {
   overflow-y: auto;
 }
 
+/* ─── v2 'Calm' primitives ───────────────────────────────
+   CSS owns hover/active so these components stay server-
+   rendered (no useState, no mouse handlers). */
+
+.big-button {
+  user-select: none;
+}
+.big-button:hover {
+  transform: translateY(-1px);
+}
+.big-button:active {
+  transform: translateY(0);
+}
+.big-button-primary:hover {
+  background: var(--brass-deep);
+  border-color: var(--brass-deep);
+}
+.big-button-secondary:hover {
+  background: color-mix(in oklch, var(--brass) 6%, transparent);
+  border-color: var(--brass);
+}
+.big-button-quiet:hover {
+  color: var(--ink);
+  background: color-mix(in oklch, var(--brass) 4%, transparent);
+}
+.big-button-danger:hover {
+  background: color-mix(in oklch, var(--danger) 8%, transparent);
+}
+
+.big-task-card:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-raised);
+}
+
 /* ─── Theme toggle ───────────────────────────────────────── */
 
 .theme-toggle {

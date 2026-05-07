@@ -21,6 +21,8 @@ const PANEL: React.CSSProperties = {
   padding: "1.25rem",
   width: "100%",
   maxWidth: "32rem",
+  maxHeight: "90vh",
+  overflowY: "auto",
   boxShadow: "0 12px 40px rgba(0,0,0,0.35)",
 };
 

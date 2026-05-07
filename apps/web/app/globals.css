@@ -235,8 +235,9 @@ h3 {
 }
 
 .hamburger-btn {
-  width: 40px;
-  height: 40px;
+  /* 44×44 minimum touch target per Apple/WCAG AAA mobile guidance. */
+  width: 44px;
+  height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -987,10 +988,32 @@ tbody tr:last-child td {
   .cadence-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+  /* PageTitle h1 scales down on mobile to keep title + sub balanced inside
+     the narrower main column. !important because the size lives in inline
+     styles on the PageTitle h1. */
+  .page-title h1 {
+    font-size: 32px !important;
+  }
+  .page-title p {
+    font-size: 16px !important;
+  }
+  /* Tasks detail panel — selected-task title also scales. */
+  .task-detail h2 {
+    font-size: 26px !important;
+  }
 }
 
 /* Tablet: 768px */
 @media (max-width: 768px) {
+  /* Prevent iOS auto-zoom on focus by ensuring text inputs render at
+     >=16px font-size. Below 16px Safari forces a viewport zoom on tap
+     that sticks until the user manually pinches back out. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
   /* Stack all grids to single column */
   .grid.cols-2,
   .grid.cols-3 {
@@ -1035,6 +1058,12 @@ tbody tr:last-child td {
   }
   .cadence-grid {
     grid-template-columns: 1fr;
+  }
+  .page-title h1 {
+    font-size: 28px !important;
+  }
+  .task-detail h2 {
+    font-size: 22px !important;
   }
 }
 

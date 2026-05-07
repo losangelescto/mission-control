@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { BigButton } from "@/app/components/BigButton";
+import { CloseDetailPanel } from "@/app/components/CloseDetailPanel";
 import { DetailSection } from "@/app/components/DetailSection";
 import { PageTitle } from "@/app/components/PageTitle";
 import { PriorityFlag } from "@/app/components/PriorityFlag";
@@ -132,7 +133,13 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
   if (filters.due_before) filterQuery.set("due_before", filters.due_before);
   const filterPrefix = filterQuery.toString();
 
-  function taskHref(taskId: number): string {
+  // The closeHref keeps current filters but drops `selected=`. Used by both
+  // the row-toggle behavior (clicking the selected row deselects it) and
+  // the X / Escape close affordances on the task-detail article.
+  const closeDetailHref = filterPrefix ? `/tasks?${filterPrefix}` : "/tasks";
+
+  function taskHref(taskId: number, isCurrentlySelected: boolean): string {
+    if (isCurrentlySelected) return closeDetailHref;
     const parts = filterPrefix ? `${filterPrefix}&selected=${taskId}` : `selected=${taskId}`;
     return `/tasks?${parts}`;
   }
@@ -229,9 +236,10 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
             return (
               <Link
                 key={task.id}
-                href={taskHref(task.id)}
+                href={taskHref(task.id, isSelected)}
                 className="task-list-row"
                 data-selected={isSelected ? "true" : undefined}
+                aria-pressed={isSelected}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -294,8 +302,11 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
             borderRadius: 10,
             padding: "32px 36px",
             marginBottom: 32,
+            position: "relative",
           }}
         >
+          <CloseDetailPanel closeHref={closeDetailHref} />
+
           <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 18, flexWrap: "wrap" }}>
             <StatusPill status={selectedTask.status} />
             <PriorityFlag priority={selectedTask.priority} />

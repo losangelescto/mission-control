@@ -152,7 +152,7 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
         : `${tasks.length} on the list. Filter to narrow down, click a row to see the detail.`;
 
   return (
-    <div style={{ maxWidth: 1080 }}>
+    <div>
       <div
         style={{
           display: "flex",

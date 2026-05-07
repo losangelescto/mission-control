@@ -83,7 +83,7 @@ export default async function SourcesPage({ searchParams }: SourcesPageProps) {
         : `${sources.length} sources uploaded. Click one to inspect what was extracted.`;
 
   return (
-    <div style={{ maxWidth: 980 }}>
+    <div>
       <div
         style={{
           display: "flex",

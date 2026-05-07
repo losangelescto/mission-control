@@ -60,7 +60,7 @@ export default async function MetricsPage({ searchParams }: MetricsPageProps) {
   const blockedTone: "warn" | "default" = summary.blocked_count > 0 ? "warn" : "default";
 
   return (
-    <div style={{ maxWidth: 980 }}>
+    <div>
       <PageTitle sub="Canon as measurement. The Seven Standards and Five Emotional Signatures rated against actual operational outcomes.">
         Metrics
       </PageTitle>

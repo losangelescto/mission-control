@@ -7,11 +7,20 @@ import {
   type DropResult,
 } from "@hello-pangea/dnd";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { PriorityFlag } from "@/app/components/PriorityFlag";
 import { StatusPill } from "@/app/components/StatusPill";
+import { BlockTaskDialog } from "@/app/tasks/BlockTaskDialog";
+import { UnblockTaskDialog } from "@/app/tasks/UnblockTaskDialog";
 import type { Task, TaskStatus } from "@/lib/api/types";
+import {
+  applyServerTaskUpdate,
+  groupTasksByStatus,
+  moveTask,
+  type KanbanColumns,
+} from "@/lib/kanban-reducer";
 import { formatTaskDue } from "@/lib/time-display";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -24,82 +33,106 @@ const COLUMNS: ReadonlyArray<{ key: TaskStatus; label: string }> = [
   { key: "backlog",     label: "Backlog"     },
 ] as const;
 
-function groupTasks(tasks: Task[]): Record<TaskStatus, Task[]> {
-  const grouped = {
-    up_next: [],
-    in_progress: [],
-    blocked: [],
-    completed: [],
-    backlog: [],
-  } as Record<TaskStatus, Task[]>;
-  for (const task of tasks) {
-    if (grouped[task.status]) grouped[task.status].push(task);
-  }
-  return grouped;
-}
+type PendingDialog =
+  | { kind: "block"; taskId: number; task: Task }
+  | { kind: "unblock"; taskId: number; task: Task; nextStatus: TaskStatus };
 
 export function KanbanBoard({ initialTasks }: { initialTasks: Task[] }) {
-  const [columns, setColumns] = useState(() => groupTasks(initialTasks));
-  // @hello-pangea/dnd injects dynamic data-rfd-* ids and inline transform
-  // styles into Draggable / Droppable on first client render — values that
-  // can't be reproduced server-side. Render an empty placeholder during
-  // SSR and the first client paint, then upgrade to the live DnD tree
-  // once mounted to eliminate React #418 hydration mismatches.
+  const router = useRouter();
+  const [columns, setColumns] = useState<KanbanColumns>(() => groupTasksByStatus(initialTasks));
   const [mounted, setMounted] = useState(false);
-  // Mobile (<900px) shows one column at a time with a tab strip.
   const [mobileActiveCol, setMobileActiveCol] = useState<TaskStatus>("up_next");
+  const [dialog, setDialog] = useState<PendingDialog | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // requestAnimationFrame lets the lint rule for set-state-in-effect
-    // pass while still flipping mounted before first paint.
     const id = window.requestAnimationFrame(() => setMounted(true));
     return () => window.cancelAnimationFrame(id);
   }, []);
 
-  const onDragEnd = useCallback(async (result: DropResult) => {
-    const { source, destination, draggableId } = result;
-    if (!destination) return;
-    if (
-      source.droppableId === destination.droppableId &&
-      source.index === destination.index
-    ) {
-      return;
-    }
-
-    const taskId = parseInt(draggableId, 10);
-    const srcKey = source.droppableId as TaskStatus;
-    const dstKey = destination.droppableId as TaskStatus;
-
-    // Optimistic update — the card lands in the new column instantly.
-    setColumns(prev => {
-      const next = { ...prev };
-      const srcList = [...(prev[srcKey] ?? [])];
-      const [moved] = srcList.splice(source.index, 1);
-      if (!moved) return prev;
-      const updated = { ...moved, status: dstKey };
-      if (srcKey === dstKey) {
-        srcList.splice(destination.index, 0, updated);
-        next[srcKey] = srcList;
-      } else {
-        next[srcKey] = srcList;
-        const dstList = [...(prev[dstKey] ?? [])];
-        dstList.splice(destination.index, 0, updated);
-        next[dstKey] = dstList;
+  const onDragEnd = useCallback(
+    async (result: DropResult) => {
+      const { source, destination, draggableId } = result;
+      if (!destination) return;
+      if (
+        source.droppableId === destination.droppableId &&
+        source.index === destination.index
+      ) {
+        return;
       }
-      return next;
-    });
 
-    if (srcKey !== dstKey) {
-      // PR-B will integrate BlockTaskDialog / UnblockTaskDialog plus
-      // rollback on failure. For now, the silent PATCH preserves the
-      // old KanbanBoard behavior verbatim.
-      await fetch(`${API_BASE_URL}/tasks/${taskId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: dstKey }),
-      });
-    }
-  }, []);
+      const taskId = parseInt(draggableId, 10);
+      const srcKey = source.droppableId as TaskStatus;
+      const dstKey = destination.droppableId as TaskStatus;
+
+      // Drag-into-blocked needs an obstacle captured. Open the existing
+      // BlockTaskDialog instead of silently PATCHing. We do NOT optimistic-
+      // move first — the card stays in its source column until the dialog
+      // confirms (or returns to source if cancelled).
+      if (dstKey === "blocked" && srcKey !== "blocked") {
+        const sourceList = columns[srcKey] ?? [];
+        const task = sourceList[source.index];
+        if (!task) return;
+        setDialog({ kind: "block", taskId, task });
+        return;
+      }
+
+      // Drag-out-of-blocked needs resolution notes. Open UnblockTaskDialog.
+      if (srcKey === "blocked" && dstKey !== "blocked") {
+        const sourceList = columns[srcKey] ?? [];
+        const task = sourceList[source.index];
+        if (!task) return;
+        setDialog({ kind: "unblock", taskId, task, nextStatus: dstKey });
+        return;
+      }
+
+      // Normal cross-column move (or same-column reorder). Optimistic
+      // update + PATCH, with rollback on failure.
+      const previousColumns = columns;
+      const nextColumns = moveTask(columns, source, destination);
+      setColumns(nextColumns);
+      setError(null);
+
+      if (srcKey === dstKey) return; // same-column reorder is local-only
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/tasks/${taskId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: dstKey }),
+        });
+        if (!res.ok) throw new Error(`PATCH failed (${res.status})`);
+        // Refetch the page on success so server-derived fields like
+        // completed_at / updated_at and the Suggested-tasks badge sync.
+        router.refresh();
+      } catch (e) {
+        // Roll back the optimistic move and surface a quiet inline error.
+        setColumns(previousColumns);
+        setError(e instanceof Error ? e.message : "Could not save the change. Try again.");
+      }
+    },
+    [columns, router],
+  );
+
+  // Block/unblock dialog success handlers. The dialog already POSTed and
+  // the API returned an updated task status of 'blocked' (block flow) or
+  // whatever next_status was passed (unblock flow). We move the card
+  // locally to match, then router.refresh() to sync the rest of the page.
+  const onBlocked = useCallback(() => {
+    if (dialog?.kind !== "block") return;
+    const blockedTask: Task = { ...dialog.task, status: "blocked" };
+    setColumns(prev => applyServerTaskUpdate(prev, blockedTask));
+    setDialog(null);
+    router.refresh();
+  }, [dialog, router]);
+
+  const onUnblocked = useCallback(() => {
+    if (dialog?.kind !== "unblock") return;
+    const unblockedTask: Task = { ...dialog.task, status: dialog.nextStatus };
+    setColumns(prev => applyServerTaskUpdate(prev, unblockedTask));
+    setDialog(null);
+    router.refresh();
+  }, [dialog, router]);
 
   const totalCount = useMemo(
     () => COLUMNS.reduce((n, c) => n + (columns[c.key]?.length ?? 0), 0),
@@ -119,9 +152,7 @@ export function KanbanBoard({ initialTasks }: { initialTasks: Task[] }) {
 
   return (
     <DragDropContext onDragEnd={onDragEnd}>
-      {/* Mobile-only tab strip — switches which single column is visible
-          at <900px. The 5 Droppables stay mounted (just hidden) so a
-          drag-drop never lands on an unmounted target. */}
+      {/* Mobile-only tab strip */}
       <div className="kanban-mobile-tabs" role="tablist" aria-label="Kanban columns">
         {COLUMNS.map(col => {
           const count = columns[col.key]?.length ?? 0;
@@ -185,6 +216,7 @@ export function KanbanBoard({ initialTasks }: { initialTasks: Task[] }) {
                               {...dragProvided.dragHandleProps}
                               className="kanban-card"
                               data-dragging={dragSnapshot.isDragging ? "true" : undefined}
+                              data-testid={`kanban-card-${task.id}`}
                             >
                               <div className="kanban-card-title">{task.title}</div>
                               <div className="kanban-card-meta">
@@ -216,11 +248,47 @@ export function KanbanBoard({ initialTasks }: { initialTasks: Task[] }) {
         })}
       </div>
 
-      {/* Quiet running total below the board — useful when several
-          columns are visible at once on desktop. */}
+      {/* Quiet running total */}
       <div className="kanban-total" aria-live="polite">
         {totalCount} task{totalCount === 1 ? "" : "s"}
       </div>
+
+      {/* Inline error pill — appears when a PATCH fails after optimistic
+          update; the moved card has already snapped back to its source
+          column via the rollback path in onDragEnd. */}
+      {error ? (
+        <div
+          role="alert"
+          style={{
+            marginTop: 12,
+            padding: "10px 14px",
+            background: "color-mix(in oklch, var(--danger) 14%, transparent)",
+            color: "var(--danger)",
+            border: "1px solid var(--danger)",
+            borderRadius: 6,
+            fontSize: 14,
+          }}
+        >
+          {error}
+        </div>
+      ) : null}
+
+      {/* Dialogs — open programmatically when drag-drop crosses the
+          blocked column boundary. */}
+      {dialog?.kind === "block" ? (
+        <BlockTaskDialog
+          taskId={dialog.taskId}
+          onClose={() => setDialog(null)}
+          onBlocked={onBlocked}
+        />
+      ) : null}
+      {dialog?.kind === "unblock" ? (
+        <UnblockTaskDialog
+          taskId={dialog.taskId}
+          onClose={() => setDialog(null)}
+          onUnblocked={onUnblocked}
+        />
+      ) : null}
     </DragDropContext>
   );
 }

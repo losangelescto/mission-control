@@ -41,7 +41,7 @@ export function DismissCandidate({ candidateId }: { candidateId: number }) {
         minHeight: "auto",
         fontSize: "0.8125rem",
         background: "transparent",
-        border: "1px solid var(--border-input)",
+        border: "1px solid var(--line)",
         borderRadius: "var(--radius)",
         color: "var(--ink-soft)",
         cursor: "pointer",

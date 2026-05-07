@@ -4,20 +4,24 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { BigButton } from "@/app/components/BigButton";
 import { ConfirmDialog } from "@/app/components/ConfirmDialog";
 import type { TaskCandidate } from "@/lib/api/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+// Priority chip color, kept here because v2 doesn't have a per-priority
+// token — these are intentionally one-off accents that read as muted on
+// a candidate row, not as the strong status signal a Task gets.
 function priorityColor(priority: string | null): string {
   switch ((priority ?? "").toLowerCase()) {
     case "high":
     case "critical":
-      return "#b91c1c";
+      return "var(--danger)";
     case "medium":
-      return "#92400e";
+      return "var(--warning)";
     case "low":
-      return "#0369a1";
+      return "var(--success)";
     default:
       return "var(--ink-faint)";
   }
@@ -34,23 +38,23 @@ export function CandidateRow({ candidate }: { candidate: TaskCandidate }) {
   const confidencePct =
     candidate.confidence != null ? Math.round(candidate.confidence * 100) : null;
 
-  async function action(kind: "approve" | "dismiss") {
+  async function action(action: "approve" | "dismiss") {
     setErr(null);
     setBusy(true);
     try {
       const res = await fetch(
-        `${API_BASE_URL}/task-candidates/${candidate.id}/${kind}`,
+        `${API_BASE_URL}/task-candidates/${candidate.id}/${action}`,
         { method: "POST" },
       );
       if (!res.ok) {
         const detail = await res.text();
-        throw new Error(`${kind} failed (${res.status}): ${detail}`);
+        throw new Error(`${action} failed (${res.status}): ${detail}`);
       }
-      setDone(kind === "approve" ? "approved" : "dismissed");
+      setDone(action === "approve" ? "approved" : "dismissed");
       setConfirmOpen(null);
       router.refresh();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : `${kind} failed`);
+      setErr(e instanceof Error ? e.message : `${action} failed`);
       setBusy(false);
       setConfirmOpen(null);
     }
@@ -58,89 +62,134 @@ export function CandidateRow({ candidate }: { candidate: TaskCandidate }) {
 
   if (done) {
     return (
-      <li className="small" style={{ color: "var(--ink-faint)" }} data-testid={`candidate-row-${candidate.id}`}>
-        {done === "approved" ? "✓ Approved — added to Tasks." : "✕ Dismissed."}
+      <li
+        data-testid={`candidate-row-${candidate.id}`}
+        style={{
+          padding: "14px 22px",
+          background: "var(--surface)",
+          border: "2px solid var(--line)",
+          borderRadius: 8,
+          fontSize: 15,
+          color: "var(--ink-faint)",
+          fontStyle: "italic",
+        }}
+      >
+        {done === "approved"
+          ? `Approved · ${candidate.title} added to Tasks.`
+          : `Dismissed · ${candidate.title}.`}
       </li>
     );
   }
 
   return (
-    <li data-testid={`candidate-row-${candidate.id}`}>
+    <li data-testid={`candidate-row-${candidate.id}`} style={{ listStyle: "none" }}>
       <article
-        className="panel"
         style={{
-          background: "var(--surface-raised)",
-          padding: "1rem",
-          marginBottom: "0.75rem",
+          background: "var(--surface)",
+          border: "2px solid var(--line)",
+          borderRadius: 8,
+          padding: "24px 26px",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "flex-start" }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <h3 style={{ margin: 0, fontSize: "1rem" }}>{candidate.title}</h3>
-            {candidate.description ? (
-              <p className="small" style={{ marginTop: "0.35rem", marginBottom: "0.5rem" }}>
-                {candidate.description}
-              </p>
-            ) : null}
-            <div className="meta-row" style={{ flexWrap: "wrap", gap: "0.4rem" }}>
-              <span className="badge">{kind.replace(/_/g, " ")}</span>
-              {candidate.suggested_priority ? (
-                <span
-                  className="badge"
-                  style={{ color: priorityColor(candidate.suggested_priority) }}
-                >
-                  {candidate.suggested_priority}
-                </span>
-              ) : null}
-              {candidate.canon_alignment ? (
-                <span className="badge">{candidate.canon_alignment}</span>
-              ) : null}
-              {candidate.inferred_owner_name ? (
-                <span className="small" style={{ color: "var(--ink-faint)" }}>
-                  owner: {candidate.inferred_owner_name}
-                </span>
-              ) : null}
-              {confidencePct != null ? (
-                <span className="small" style={{ color: "var(--ink-faint)" }}>
-                  confidence: {confidencePct}%
-                </span>
-              ) : null}
-              <Link
-                className="small"
-                href={`/sources?source_id=${candidate.source_document_id}`}
-              >
-                source #{candidate.source_document_id}
-              </Link>
-              {candidate.source_reference ? (
-                <span className="small" style={{ color: "var(--ink-faint)" }}>
-                  &ldquo;{candidate.source_reference}&rdquo;
-                </span>
-              ) : null}
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0 }}>
-            <button
-              type="button"
-              className="link-btn"
-              onClick={() => setConfirmOpen("approve")}
-              disabled={busy}
-              data-testid={`candidate-approve-${candidate.id}`}
-            >
-              Approve
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirmOpen("dismiss")}
-              disabled={busy}
-              className="btn-secondary"
-              data-testid={`candidate-dismiss-${candidate.id}`}
-            >
-              Dismiss
-            </button>
-          </div>
+        <div
+          style={{
+            fontSize: 19,
+            fontWeight: 500,
+            lineHeight: 1.35,
+            marginBottom: 10,
+            color: "var(--ink)",
+          }}
+        >
+          {candidate.title}
         </div>
+
+        {candidate.description ? (
+          <p
+            style={{
+              fontSize: 15,
+              lineHeight: 1.55,
+              color: "var(--ink-soft)",
+              margin: "0 0 14px",
+            }}
+          >
+            {candidate.description}
+          </p>
+        ) : null}
+
+        {/* Source attribution — primary citation, mirrors v2's "From your
+            call with the building engineer · Monday" pattern. */}
+        <div style={{ fontSize: 14, color: "var(--ink-soft)", marginBottom: 14 }}>
+          From{" "}
+          <Link
+            href={`/sources?source_id=${candidate.source_document_id}`}
+            style={{ color: "var(--brass)", textDecoration: "underline", textDecorationColor: "color-mix(in oklch, var(--brass) 35%, transparent)" }}
+          >
+            source #{candidate.source_document_id}
+          </Link>
+          {candidate.source_reference ? (
+            <>
+              {" "}· <em>&ldquo;{candidate.source_reference}&rdquo;</em>
+            </>
+          ) : null}
+        </div>
+
+        {/* Secondary metadata row — kept from the previous version for
+            triage value (kind, priority, canon, owner, confidence). v2
+            doesn't show this; we keep it because operators rely on it
+            to decide approve vs dismiss. */}
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 14,
+            fontSize: 12,
+            color: "var(--ink-faint)",
+            letterSpacing: "0.04em",
+            textTransform: "uppercase",
+            marginBottom: 18,
+          }}
+        >
+          <span>{kind.replace(/_/g, " ")}</span>
+          {candidate.suggested_priority ? (
+            <span style={{ color: priorityColor(candidate.suggested_priority) }}>
+              {candidate.suggested_priority}
+            </span>
+          ) : null}
+          {candidate.canon_alignment ? <span>{candidate.canon_alignment}</span> : null}
+          {candidate.inferred_owner_name ? (
+            <span>owner · {candidate.inferred_owner_name}</span>
+          ) : null}
+          {confidencePct != null ? <span>{confidencePct}%</span> : null}
+        </div>
+
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <BigButton
+            kind="primary"
+            onClick={() => setConfirmOpen("approve")}
+            disabled={busy}
+            ariaLabel={`Approve candidate: ${candidate.title}`}
+          >
+            <span data-testid={`candidate-approve-${candidate.id}`}>Approve</span>
+          </BigButton>
+          <BigButton
+            kind="secondary"
+            onClick={() => setConfirmOpen("dismiss")}
+            disabled={busy}
+            ariaLabel={`Dismiss candidate: ${candidate.title}`}
+          >
+            <span data-testid={`candidate-dismiss-${candidate.id}`}>Dismiss</span>
+          </BigButton>
+        </div>
+
         {err ? (
-          <div className="small" role="alert" style={{ color: "#991b1b", marginTop: "0.5rem" }}>
+          <div
+            role="alert"
+            style={{
+              marginTop: 14,
+              fontSize: 14,
+              color: "var(--danger)",
+            }}
+          >
             {err}
           </div>
         ) : null}

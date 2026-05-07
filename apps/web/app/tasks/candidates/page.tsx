@@ -2,6 +2,8 @@ import Link from "next/link";
 
 import { apiClient } from "@/lib/api/client";
 
+import { PageTitle } from "../../components/PageTitle";
+
 import { CandidateRow } from "./CandidateRow";
 
 export const dynamic = "force-dynamic";
@@ -15,42 +17,88 @@ export default async function CandidatesPage() {
     error = e instanceof Error ? e.message : "Could not load candidates";
   }
 
+  const subtitle =
+    candidates.length === 0
+      ? undefined
+      : candidates.length === 1
+        ? "One candidate awaiting your call. Approve to convert into a task, or dismiss."
+        : `${candidates.length} candidates awaiting your call. Approve to convert into a task, or dismiss.`;
+
   return (
-    <section className="stack">
-      <div className="panel">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "1rem" }}>
-          <h1 style={{ margin: 0 }}>Suggested Tasks</h1>
-          <span className="small" style={{ color: "var(--ink-faint)" }}>
-            {candidates.length} pending
-          </span>
-        </div>
-        <p className="small" style={{ marginTop: "0.4rem", color: "var(--ink-faint)" }}>
-          Tasks the system extracted from sources you&apos;ve uploaded. Approve to convert
-          into real tasks, or dismiss.
-        </p>
-      </div>
+    <div style={{ maxWidth: 800 }}>
+      <PageTitle sub={subtitle ?? "Task candidates auto-extracted from your uploaded sources. Approve to convert into a task, or dismiss."}>
+        Suggested
+      </PageTitle>
 
       {error ? (
-        <article className="panel" role="alert">
-          <h2>Could not load suggested tasks</h2>
-          <p className="small" style={{ color: "#991b1b" }}>{error}</p>
+        <article
+          role="alert"
+          style={{
+            background: "var(--surface-raised)",
+            border: "2px solid var(--danger)",
+            borderRadius: 8,
+            padding: "20px 22px",
+          }}
+        >
+          <h2 style={{ margin: 0, fontSize: 18, color: "var(--danger)" }}>
+            Could not load suggested tasks
+          </h2>
+          <p
+            style={{
+              marginTop: 8,
+              fontSize: 15,
+              color: "var(--ink-soft)",
+              fontFamily: "inherit",
+              letterSpacing: 0,
+              textTransform: "none",
+            }}
+          >
+            {error}
+          </p>
         </article>
       ) : candidates.length === 0 ? (
-        <article className="panel">
-          <p className="small" style={{ color: "var(--ink-faint)" }}>
-            No suggested tasks. Upload a source to extract candidates.
+        <article
+          style={{
+            background: "var(--surface)",
+            border: "2px solid var(--line)",
+            borderRadius: 8,
+            padding: "32px 28px",
+            textAlign: "center",
+          }}
+        >
+          <p
+            className="serif"
+            style={{
+              fontStyle: "italic",
+              fontSize: 18,
+              color: "var(--ink-soft)",
+              margin: 0,
+            }}
+          >
+            No suggested tasks. Quiet inbox today.
           </p>
-          <p className="small" style={{ marginTop: "0.4rem" }}>
-            <Link href="/sources">Go to Sources →</Link>
+          <p style={{ marginTop: 14, fontSize: 15 }}>
+            <Link href="/sources" style={{ color: "var(--brass)", fontWeight: 500 }}>
+              Upload a source →
+            </Link>
           </p>
         </article>
       ) : (
-        <ul className="list" style={{ listStyle: "none", margin: 0, padding: 0 }}>
-          {candidates.map((c) => (
+        <ul
+          style={{
+            listStyle: "none",
+            margin: 0,
+            padding: 0,
+            display: "flex",
+            flexDirection: "column",
+            gap: 16,
+          }}
+        >
+          {candidates.map(c => (
             <CandidateRow key={c.id} candidate={c} />
           ))}
         </ul>
       )}
-    </section>
+    </div>
   );
 }

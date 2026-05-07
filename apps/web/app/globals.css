@@ -165,8 +165,17 @@ h3 {
 
 /* ─── Editorial serif utility — Newsreader, opt-in ──────── */
 
+/* overflow-wrap: anywhere on every long-string container so user-supplied
+   strings (filenames, canon_doc_ids, search queries) don't blow past their
+   card edges. Inherited by descendants per spec, so the rule on .page-title
+   covers the eyebrow + sub paragraph alongside the serif h1. */
 .serif {
   font-family: var(--serif);
+  overflow-wrap: anywhere;
+}
+
+.page-title {
+  overflow-wrap: anywhere;
 }
 
 /* ─── App shell — sidebar + sticky header + main column ──
@@ -338,6 +347,17 @@ h3 {
 .big-task-card:hover {
   border-color: var(--line-strong);
   background: var(--surface-raised);
+}
+
+/* Long-string defense for user-supplied content. Task titles, source
+   filenames, candidate descriptions, etc. can be no-space strings (e.g.
+   D00_THE_UNCOMMON_PURSUIT_ECOSYSTEM_MAP_2026_03_17_V58.DOCX) that
+   overflow without an explicit wrap rule. Cascades to descendants. */
+article,
+.big-task-card,
+.task-list-row,
+.task-detail {
+  overflow-wrap: anywhere;
 }
 
 /* Task list row — selected state owns the brass border via data-selected.

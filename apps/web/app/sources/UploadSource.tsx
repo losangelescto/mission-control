@@ -1,10 +1,11 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
 
-import { resolveSourceTypeAfterFilePick } from "@/lib/upload-source";
+import { BigButton } from "@/app/components/BigButton";
 import type { SourceType } from "@/lib/api/types";
+import { resolveSourceTypeAfterFilePick } from "@/lib/upload-source";
 
 const SOURCE_TYPES: readonly SourceType[] = [
   "canon_doc",
@@ -14,7 +15,41 @@ const SOURCE_TYPES: readonly SourceType[] = [
   "board_seed",
 ];
 
-const ACCEPT_EXTENSIONS = ".pdf,.txt,.md,.docx,.mp3,.mp4,.m4a,.wav,.ogg,.flac,.webm,.mov";
+const SOURCE_TYPE_LABEL: Record<SourceType, string> = {
+  canon_doc: "Canon document",
+  thread_export: "Thread export",
+  transcript: "Recorded call",
+  note: "Note",
+  board_seed: "Board seed",
+};
+
+const ACCEPT_EXTENSIONS =
+  ".pdf,.txt,.md,.docx,.mp3,.mp4,.m4a,.wav,.ogg,.flac,.webm,.mov";
+
+const OVERLAY: React.CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(15, 13, 10, 0.4)",
+  backdropFilter: "blur(2px)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  zIndex: 100,
+  padding: "1rem",
+};
+
+const PANEL: React.CSSProperties = {
+  background: "var(--surface-raised)",
+  color: "var(--ink)",
+  borderRadius: 10,
+  border: "2px solid var(--line)",
+  padding: "28px 30px",
+  width: "100%",
+  maxWidth: "34rem",
+  boxShadow: "var(--shadow-md)",
+  maxHeight: "90vh",
+  overflowY: "auto",
+};
 
 export default function UploadSource() {
   const router = useRouter();
@@ -34,6 +69,32 @@ export default function UploadSource() {
   // source-type flip even though the user had ticked it. Holding the
   // value in state keeps visual + submitted value aligned at all times.
   const [activate, setActivate] = useState(false);
+
+  // Esc closes (matches BlockTaskDialog pattern).
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape" && !busy) closeDialog();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, busy]);
+
+  // Lock body scroll while open.
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [open]);
+
+  function closeDialog() {
+    setOpen(false);
+    setError(null);
+    setChosenName("");
+  }
 
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -84,8 +145,7 @@ export default function UploadSource() {
         const detail = await response.text();
         throw new Error(`Upload failed (${response.status}): ${detail}`);
       }
-      setOpen(false);
-      setChosenName("");
+      closeDialog();
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
@@ -94,131 +154,195 @@ export default function UploadSource() {
     }
   }
 
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="badge"
-        style={{ padding: "0.4rem 0.75rem", border: "none", cursor: "pointer" }}
-      >
-        + Upload Source
-      </button>
-    );
-  }
-
   const isCanon = sourceType === "canon_doc";
 
   return (
-    <form onSubmit={onSubmit} className="stack-sm" style={{ marginTop: "0.5rem" }}>
-      <label className="stack-sm">
-        <span>File</span>
-        <div className="file-input-row">
-          <label className="file-input-trigger">
-            Choose File
-            <input
-              name="file"
-              type="file"
-              required
-              accept={ACCEPT_EXTENSIONS}
-              onChange={onFileChange}
-              className="file-input-hidden"
-            />
-          </label>
-          <span className="file-input-name">
-            {chosenName || "No file chosen"}
-          </span>
-        </div>
-      </label>
+    <>
+      <BigButton kind="primary" onClick={() => setOpen(true)}>
+        + Upload a document
+      </BigButton>
 
-      <label className="stack-sm">
-        <span>Title <span className="small" style={{ color: "var(--ink-faint)" }}>(optional)</span></span>
-        <input
-          name="title"
-          type="text"
-          placeholder="Defaults to filename"
-        />
-      </label>
-
-      <label className="stack-sm">
-        <span>Source type</span>
-        <select
-          name="source_type"
-          value={sourceType}
-          onChange={onSourceTypeChange}
-          required
-        >
-          {SOURCE_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      {isCanon ? (
-        <>
-          <label className="stack-sm">
-            <span>Canonical doc id</span>
-            <input
-              name="canonical_doc_id"
-              type="text"
-              placeholder="e.g. canon-vendor-onboarding"
-            />
-          </label>
-          <label className="stack-sm">
-            <span>Version label</span>
-            <input name="version_label" type="text" placeholder="e.g. v3" />
-          </label>
-          <label
-            style={{
-              display: "flex",
-              gap: "0.5rem",
-              alignItems: "center",
-              cursor: "pointer",
-              userSelect: "none",
-            }}
-          >
-            <input
-              name="is_active_canon_version"
-              type="checkbox"
-              value="true"
-              checked={activate}
-              onChange={(e) => setActivate(e.target.checked)}
-              data-testid="activate-canon-checkbox"
-            />
-            <span className="small">Activate as the active canon version on upload</span>
-          </label>
-        </>
-      ) : null}
-
-      {error ? (
-        <div className="small" role="alert" style={{ color: "#991b1b" }}>
-          {error}
-        </div>
-      ) : null}
-
-      <div className="cta-row">
-        <button type="submit" className="link-btn" disabled={busy}>
-          {busy ? "Uploading…" : "Upload"}
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setOpen(false);
-            setError(null);
-            setChosenName("");
+      {open ? (
+        <div
+          style={OVERLAY}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !busy) closeDialog();
           }}
-          disabled={busy}
-          className="btn-secondary"
+          role="presentation"
         >
-          Cancel
-        </button>
-      </div>
-      <p className="small" style={{ color: "var(--ink-faint)" }}>
-        After upload, processing runs in the background — the source will appear in the list with a
-        status badge that updates as it completes.
-      </p>
-    </form>
+          <div
+            style={PANEL}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="upload-source-title"
+          >
+            <h2
+              id="upload-source-title"
+              className="serif"
+              style={{
+                fontSize: 26,
+                fontWeight: 400,
+                margin: "0 0 6px",
+                color: "var(--ink)",
+                letterSpacing: 0,
+                textTransform: "none",
+                lineHeight: 1.2,
+              }}
+            >
+              Upload a document
+            </h2>
+            <p
+              style={{
+                fontSize: 15,
+                color: "var(--ink-soft)",
+                margin: "0 0 20px",
+                lineHeight: 1.5,
+              }}
+            >
+              The system reads it and pulls out tasks. Processing runs in the background;
+              the source will appear in the list with a status that updates as it completes.
+            </p>
+
+            <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <FormField label="File">
+                <div className="file-input-row">
+                  <label className="file-input-trigger">
+                    Choose file
+                    <input
+                      name="file"
+                      type="file"
+                      required
+                      accept={ACCEPT_EXTENSIONS}
+                      onChange={onFileChange}
+                      className="file-input-hidden"
+                    />
+                  </label>
+                  <span className="file-input-name">
+                    {chosenName || "No file chosen"}
+                  </span>
+                </div>
+              </FormField>
+
+              <FormField label="Title" optional>
+                <input
+                  name="title"
+                  type="text"
+                  placeholder="Defaults to filename"
+                />
+              </FormField>
+
+              <FormField label="Source type">
+                <select
+                  name="source_type"
+                  value={sourceType}
+                  onChange={onSourceTypeChange}
+                  required
+                >
+                  {SOURCE_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {SOURCE_TYPE_LABEL[t]}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+
+              {isCanon ? (
+                <>
+                  <FormField label="Canonical doc id">
+                    <input
+                      name="canonical_doc_id"
+                      type="text"
+                      placeholder="e.g. canon-vendor-onboarding"
+                    />
+                  </FormField>
+                  <FormField label="Version label">
+                    <input
+                      name="version_label"
+                      type="text"
+                      placeholder="e.g. v3"
+                    />
+                  </FormField>
+                  {/* Native checkbox kept as-is for FormData + tests +
+                      a11y. Brass accent + 22×22 size matches BigCheckbox;
+                      we inline rather than wrap because this checkbox
+                      needs both `name`, `value`, and `data-testid` and
+                      the Activate label sits on a single line. */}
+                  <label
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 12,
+                      cursor: "pointer",
+                      userSelect: "none",
+                    }}
+                  >
+                    <input
+                      name="is_active_canon_version"
+                      type="checkbox"
+                      value="true"
+                      checked={activate}
+                      onChange={(e) => setActivate(e.target.checked)}
+                      data-testid="activate-canon-checkbox"
+                      style={{
+                        accentColor: "var(--brass)",
+                        width: 22,
+                        height: 22,
+                        cursor: "pointer",
+                      }}
+                    />
+                    <span style={{ fontSize: 15, color: "var(--ink)" }}>
+                      Activate as the active canon version on upload
+                    </span>
+                  </label>
+                </>
+              ) : null}
+
+              {error ? (
+                <div role="alert" style={{ fontSize: 14, color: "var(--danger)" }}>
+                  {error}
+                </div>
+              ) : null}
+
+              <div style={{ display: "flex", gap: 12, marginTop: 6, flexWrap: "wrap" }}>
+                <BigButton kind="primary" type="submit" disabled={busy}>
+                  {busy ? "Uploading…" : "Upload"}
+                </BigButton>
+                <BigButton
+                  kind="secondary"
+                  onClick={closeDialog}
+                  disabled={busy}
+                >
+                  Cancel
+                </BigButton>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+function FormField({
+  label,
+  optional,
+  children,
+}: {
+  label: string;
+  optional?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <span style={{ fontSize: 14, fontWeight: 500, color: "var(--ink)" }}>
+        {label}
+        {optional ? (
+          <span style={{ marginLeft: 6, fontSize: 13, fontWeight: 400, color: "var(--ink-faint)" }}>
+            (optional)
+          </span>
+        ) : null}
+      </span>
+      {children}
+    </label>
   );
 }

@@ -1,6 +1,9 @@
+import Link from "next/link";
+
+import { DetailSection } from "@/app/components/DetailSection";
+import { PageTitle } from "@/app/components/PageTitle";
 import { apiClient } from "@/lib/api/client";
 import { parsePositiveIntParam } from "@/lib/search-params";
-import Link from "next/link";
 
 import DeleteSourceButton from "./DeleteSourceButton";
 import SourceStatus from "./SourceStatus";
@@ -22,6 +25,14 @@ const AUDIO_VIDEO_EXTENSIONS = [
   ".mov",
 ];
 
+const SOURCE_TYPE_LABEL: Record<string, string> = {
+  canon_doc: "Canon document",
+  thread_export: "Thread export",
+  transcript: "Recorded call",
+  note: "Note",
+  board_seed: "Board seed",
+};
+
 function displayName(filename: string): string {
   return filename.replace(/^[0-9a-f]{32}_/i, "");
 }
@@ -37,6 +48,10 @@ function sourceLabel(source: { filename: string; processing_metadata?: Record<st
 function isMediaFile(filename: string): boolean {
   const lower = filename.toLowerCase();
   return AUDIO_VIDEO_EXTENSIONS.some((ext) => lower.endsWith(ext));
+}
+
+function formatAdded(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 export default async function SourcesPage({ searchParams }: SourcesPageProps) {
@@ -59,113 +74,209 @@ export default async function SourcesPage({ searchParams }: SourcesPageProps) {
     ? await apiClient.getSourceStatus(selectedSource.id).catch(() => null)
     : null;
 
+  const subtitle =
+    sources.length === 0
+      ? "Documents drive everything here. Uploaded sources are read by the system to extract tasks and canon."
+      : sources.length === 1
+        ? "One source uploaded so far."
+        : `${sources.length} sources uploaded. Click one to inspect what was extracted.`;
+
   return (
-    <section className="stack">
-      <div className="panel">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "1rem" }}>
-          <h1>Sources</h1>
-          <UploadSource />
-        </div>
-        <form action="/search" method="get" className="stack-sm" style={{ marginTop: "0.5rem" }}>
-          <input
-            type="search"
-            name="q"
-            placeholder="Search sources by filename or text…"
-            aria-label="Search within sources"
-            style={{ width: "100%", padding: "0.4rem 0.6rem" }}
-          />
-          <input type="hidden" name="type" value="sources" />
-        </form>
+    <div style={{ maxWidth: 980 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 24,
+          flexWrap: "wrap",
+          marginBottom: 16,
+        }}
+      >
+        <PageTitle sub={subtitle}>Sources</PageTitle>
+        <UploadSource />
       </div>
-      <div className="grid cols-2">
-        <article className="panel">
-          <h2>Source List</h2>
-          <ul className="list">
-            {sources.map((source) => (
-              <li key={source.id}>
-                <div>
-                  <Link href={`/sources?source_id=${source.id}`}>
-                    <strong>{sourceLabel(source)}</strong>
-                  </Link>
+
+      {/* Source list — single column of v2 doc-row cards */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 40 }}>
+        {sources.length === 0 ? (
+          <div
+            style={{
+              padding: "32px 28px",
+              border: "2px solid var(--line)",
+              borderRadius: 8,
+              background: "var(--surface)",
+              textAlign: "center",
+              color: "var(--ink-soft)",
+              fontStyle: "italic",
+              fontSize: 16,
+            }}
+          >
+            No sources uploaded yet.
+          </div>
+        ) : (
+          sources.map((source) => {
+            const isSelected = source.id === sourceId;
+            const isActiveCanon = activeSet.has(source.id);
+            const kindLabel =
+              SOURCE_TYPE_LABEL[source.source_type] ?? source.source_type;
+            return (
+              <Link
+                key={source.id}
+                href={`/sources?source_id=${source.id}`}
+                className="task-list-row"
+                data-selected={isSelected ? "true" : undefined}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 18,
+                  padding: "20px 24px",
+                  background: isSelected ? "var(--surface-raised)" : "var(--surface)",
+                  border: "2px solid",
+                  borderColor: isSelected ? "var(--brass)" : "var(--line)",
+                  borderRadius: 8,
+                  textDecoration: "none",
+                  color: "inherit",
+                  transition: "border-color 120ms ease, background 120ms ease",
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: 18,
+                      fontWeight: 500,
+                      lineHeight: 1.35,
+                      marginBottom: 6,
+                      color: "var(--ink)",
+                    }}
+                  >
+                    {sourceLabel(source)}
+                  </div>
+                  <div style={{ fontSize: 14, color: "var(--ink-soft)" }}>
+                    {kindLabel}
+                    {source.version_label ? <> · {source.version_label}</> : null}
+                    {" · Added "}
+                    {formatAdded(source.created_at)}
+                  </div>
                 </div>
-                <div className="small">
-                  {source.source_type}{" "}
-                  {activeSet.has(source.id) ? <span className="badge">active canon</span> : null}{" "}
-                  <span className="badge" style={statusBadgeStyle(source.processing_status)}>
-                    {source.processing_status}
-                  </span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </article>
-        <article className="panel">
-          <h2>Source Detail</h2>
-          {selectedSource ? (
-            <div className="stack-sm">
-              <div>
-                <strong>{sourceLabel(selectedSource)}</strong>
-                {sourceLabel(selectedSource) !== displayName(selectedSource.filename) ? (
-                  <span className="small" style={{ marginLeft: "0.5rem", color: "var(--ink-faint)" }}>
-                    ({displayName(selectedSource.filename)})
+                {isActiveCanon ? (
+                  <span
+                    style={{
+                      padding: "6px 14px",
+                      borderRadius: 999,
+                      background: "color-mix(in oklch, var(--brass) 14%, transparent)",
+                      color: "var(--brass-deep)",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      letterSpacing: "0.04em",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Active Canon
                   </span>
                 ) : null}
-              </div>
-              <div className="small">ID: {selectedSource.id}</div>
-              <div className="small">Type: {selectedSource.source_type}</div>
-              <div className="small">Canonical Doc ID: {selectedSource.canonical_doc_id ?? "-"}</div>
-              <div className="small">Version: {selectedSource.version_label ?? "-"}</div>
-              <div className="small">
-                Canon:{" "}
-                {selectedSource.is_active_canon_version ? (
-                  <span className="badge">active canon</span>
-                ) : selectedSource.source_type === "canon_doc" ? (
-                  "inactive"
-                ) : (
-                  "-"
-                )}
-              </div>
-              {selectedStatus ? (
-                <SourceStatus sourceId={selectedSource.id} initial={selectedStatus} />
-              ) : null}
-              {isMediaFile(selectedSource.filename) && selectedSource.processing_metadata ? (
-                <TranscriptView
-                  segments={selectedSource.processing_metadata.segments ?? []}
-                  durationSeconds={selectedSource.processing_metadata.duration_seconds}
-                />
-              ) : null}
-              <details>
-                <summary>Extracted Text</summary>
-                <pre className="small mono">{selectedSource.extracted_text.slice(0, 3000)}</pre>
-              </details>
-              <div style={{ marginTop: "0.5rem" }}>
-                <DeleteSourceButton
-                  sourceId={selectedSource.id}
-                  sourceLabel={sourceLabel(selectedSource)}
-                  isActiveCanon={selectedSource.is_active_canon_version}
-                />
-              </div>
-            </div>
-          ) : (
-            <p className="small">No source selected.</p>
-          )}
-        </article>
+              </Link>
+            );
+          })
+        )}
       </div>
-    </section>
-  );
-}
 
-function statusBadgeStyle(state: string): { background: string; color: string } {
-  switch (state) {
-    case "queued":
-      return { background: "#e5e7eb", color: "#374151" };
-    case "processing":
-      return { background: "#dbeafe", color: "#1e40af" };
-    case "partial":
-      return { background: "#fef3c7", color: "#92400e" };
-    case "failed":
-      return { background: "#fee2e2", color: "#991b1b" };
-    default:
-      return { background: "#d1fae5", color: "#065f46" };
-  }
+      {/* Selected source detail */}
+      {selectedSource ? (
+        <article
+          style={{
+            background: "var(--surface-raised)",
+            border: "2px solid var(--line)",
+            borderRadius: 10,
+            padding: "32px 36px",
+            marginBottom: 32,
+          }}
+        >
+          <h2
+            className="serif"
+            style={{
+              fontSize: 28,
+              fontWeight: 400,
+              letterSpacing: "-0.005em",
+              lineHeight: 1.2,
+              margin: "0 0 6px",
+              color: "var(--ink)",
+            }}
+          >
+            {sourceLabel(selectedSource)}
+          </h2>
+          {sourceLabel(selectedSource) !== displayName(selectedSource.filename) ? (
+            <div style={{ fontSize: 14, color: "var(--ink-faint)", marginBottom: 18 }}>
+              ({displayName(selectedSource.filename)})
+            </div>
+          ) : null}
+          <div style={{ fontSize: 16, color: "var(--ink-soft)", marginBottom: 28 }}>
+            {SOURCE_TYPE_LABEL[selectedSource.source_type] ?? selectedSource.source_type}
+            {selectedSource.version_label ? <> · {selectedSource.version_label}</> : null}
+            {" · ID #"}{selectedSource.id}
+            {" · Added "}{formatAdded(selectedSource.created_at)}
+          </div>
+
+          {selectedStatus ? (
+            <DetailSection title="Processing status">
+              <SourceStatus sourceId={selectedSource.id} initial={selectedStatus} />
+            </DetailSection>
+          ) : null}
+
+          <DetailSection title="Canon">
+            {selectedSource.is_active_canon_version ? (
+              <span
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: 999,
+                  background: "color-mix(in oklch, var(--brass) 14%, transparent)",
+                  color: "var(--brass-deep)",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  letterSpacing: "0.04em",
+                }}
+              >
+                Active Canon
+              </span>
+            ) : selectedSource.source_type === "canon_doc" ? (
+              <span style={{ fontSize: 15, color: "var(--ink-soft)" }}>Inactive version</span>
+            ) : (
+              <span style={{ fontSize: 15, color: "var(--ink-faint)" }}>Not a canon document</span>
+            )}
+            {selectedSource.canonical_doc_id ? (
+              <div style={{ marginTop: 6, fontSize: 14, color: "var(--ink-faint)" }}>
+                Canonical doc id: <code>{selectedSource.canonical_doc_id}</code>
+              </div>
+            ) : null}
+          </DetailSection>
+
+          {isMediaFile(selectedSource.filename) && selectedSource.processing_metadata ? (
+            <DetailSection title="Transcript">
+              <TranscriptView
+                segments={selectedSource.processing_metadata.segments ?? []}
+                durationSeconds={selectedSource.processing_metadata.duration_seconds}
+              />
+            </DetailSection>
+          ) : null}
+
+          <DetailSection title="Extracted text">
+            <details>
+              <summary style={{ fontSize: 15 }}>Show first 3000 characters</summary>
+              <pre className="small mono" style={{ marginTop: 10 }}>
+                {selectedSource.extracted_text.slice(0, 3000)}
+              </pre>
+            </details>
+          </DetailSection>
+
+          <DetailSection title="Danger zone">
+            <DeleteSourceButton
+              sourceId={selectedSource.id}
+              sourceLabel={sourceLabel(selectedSource)}
+              isActiveCanon={selectedSource.is_active_canon_version}
+            />
+          </DetailSection>
+        </article>
+      ) : null}
+    </div>
+  );
 }

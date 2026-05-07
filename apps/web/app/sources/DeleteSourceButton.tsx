@@ -77,7 +77,7 @@ export default function DeleteSourceButton({
         onCancel={() => setOpen(false)}
       />
       {err ? (
-        <span className="small" style={{ color: "#991b1b" }}>
+        <span className="small" style={{ color: "var(--danger)" }}>
           {err}
         </span>
       ) : null}

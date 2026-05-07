@@ -28,7 +28,7 @@ export function DismissCandidate({ candidateId }: { candidateId: number }) {
   }
 
   if (state === "done") {
-    return <span className="small" style={{ color: "var(--text-tertiary)", flexShrink: 0 }}>Dismissed</span>;
+    return <span className="small" style={{ color: "var(--ink-faint)", flexShrink: 0 }}>Dismissed</span>;
   }
 
   return (
@@ -43,7 +43,7 @@ export function DismissCandidate({ candidateId }: { candidateId: number }) {
         background: "transparent",
         border: "1px solid var(--border-input)",
         borderRadius: "var(--radius)",
-        color: "var(--text-secondary)",
+        color: "var(--ink-soft)",
         cursor: "pointer",
         fontFamily: "inherit",
         fontWeight: 600,

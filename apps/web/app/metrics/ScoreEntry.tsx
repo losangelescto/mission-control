@@ -57,12 +57,12 @@ export function ScoreEntry({
 
   const color =
     score === 0
-      ? "var(--text-tertiary)"
+      ? "var(--ink-faint)"
       : score <= 3
-        ? "var(--red)"
+        ? "var(--danger)"
         : score <= 6
-          ? "var(--yellow)"
-          : "var(--green)";
+          ? "var(--warning)"
+          : "var(--brass)";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
@@ -105,7 +105,7 @@ export function ScoreEntry({
         >
           {saving ? "Saving..." : "Save"}
         </button>
-        {saved && <span className="small" style={{ color: "var(--green)" }}>Saved</span>}
+        {saved && <span className="small" style={{ color: "var(--brass)" }}>Saved</span>}
       </div>
     </div>
   );

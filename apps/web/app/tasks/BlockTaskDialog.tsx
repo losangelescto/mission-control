@@ -27,10 +27,10 @@ const OVERLAY: React.CSSProperties = {
 };
 
 const PANEL: React.CSSProperties = {
-  background: "var(--bg-base)",
-  color: "var(--text-primary)",
+  background: "var(--canvas)",
+  color: "var(--ink)",
   borderRadius: "var(--radius)",
-  border: "1px solid var(--border)",
+  border: "1px solid var(--line)",
   padding: "1.25rem",
   width: "100%",
   maxWidth: "32rem",
@@ -95,7 +95,7 @@ export function BlockTaskDialog({ taskId, onClose, onBlocked }: Props) {
         <h2 id="block-dialog-title" style={{ marginTop: 0 }}>
           Block Task
         </h2>
-        <p className="small" style={{ color: "var(--text-tertiary)" }}>
+        <p className="small" style={{ color: "var(--ink-faint)" }}>
           Capture what is blocking this task so the unblock recommendation has
           the context it needs.
         </p>

@@ -129,8 +129,8 @@ export default function SearchBar() {
             width: "100%",
             padding: "0.4rem 0.6rem",
             borderRadius: "6px",
-            border: "1px solid var(--border)",
-            background: "var(--bg-input)",
+            border: "1px solid var(--line)",
+            background: "var(--surface-inset)",
             color: "inherit",
             fontFamily: "inherit",
             fontSize: "0.85rem",
@@ -148,9 +148,9 @@ export default function SearchBar() {
             zIndex: 50,
             maxHeight: "60vh",
             overflowY: "auto",
-            background: "var(--bg-elevated)",
-            color: "var(--text-primary)",
-            border: "1px solid var(--border)",
+            background: "var(--surface-raised)",
+            color: "var(--ink)",
+            border: "1px solid var(--line)",
             borderRadius: "6px",
             boxShadow: "0 6px 24px rgba(0,0,0,0.18)",
           }}
@@ -179,7 +179,7 @@ export default function SearchBar() {
                     className="small"
                     style={{
                       padding: "0.35rem 0.6rem",
-                      background: "var(--bg-surface)",
+                      background: "var(--surface)",
                       fontWeight: 600,
                       textTransform: "uppercase",
                       letterSpacing: "0.04em",
@@ -195,7 +195,7 @@ export default function SearchBar() {
                         aria-selected="false"
                         data-testid={`search-result-${r.type}-${r.id}`}
                         style={{
-                          borderTop: "1px solid var(--border)",
+                          borderTop: "1px solid var(--line)",
                         }}
                       >
                         <button
@@ -242,7 +242,7 @@ export default function SearchBar() {
                           style={{
                             padding: "0 0.6rem 0.5rem 1.6rem",
                             cursor: "pointer",
-                            color: "var(--text-tertiary)",
+                            color: "var(--ink-faint)",
                           }}
                           dangerouslySetInnerHTML={{ __html: r.snippet || "" }}
                         />
@@ -256,7 +256,7 @@ export default function SearchBar() {
 
           <div
             style={{
-              borderTop: "1px solid var(--border)",
+              borderTop: "1px solid var(--line)",
               padding: "0.4rem 0.6rem",
               textAlign: "right",
             }}

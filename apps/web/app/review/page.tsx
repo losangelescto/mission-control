@@ -153,7 +153,7 @@ function CadenceIndicators({ cadences }: { cadences: CadenceStatus[] }) {
           key={c.cadence}
           className="panel"
           style={{
-            borderLeft: `3px solid ${c.overdue ? "var(--red)" : "var(--green)"}`,
+            borderLeft: `3px solid ${c.overdue ? "var(--danger)" : "var(--brass)"}`,
           }}
         >
           <h3 style={{ textTransform: "capitalize" }}>{c.cadence}</h3>
@@ -179,7 +179,7 @@ function CadenceIndicators({ cadences }: { cadences: CadenceStatus[] }) {
         data-testid="cadence-card-ad_hoc"
       >
         <h3>Ad Hoc</h3>
-        <div className="small" style={{ marginTop: "0.375rem", color: "var(--text-tertiary)" }}>
+        <div className="small" style={{ marginTop: "0.375rem", color: "var(--ink-faint)" }}>
           On demand — no fixed schedule.
         </div>
         <div style={{ marginTop: "0.625rem" }}>

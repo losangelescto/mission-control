@@ -20,11 +20,11 @@ export default async function CandidatesPage() {
       <div className="panel">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "1rem" }}>
           <h1 style={{ margin: 0 }}>Suggested Tasks</h1>
-          <span className="small" style={{ color: "var(--text-tertiary)" }}>
+          <span className="small" style={{ color: "var(--ink-faint)" }}>
             {candidates.length} pending
           </span>
         </div>
-        <p className="small" style={{ marginTop: "0.4rem", color: "var(--text-tertiary)" }}>
+        <p className="small" style={{ marginTop: "0.4rem", color: "var(--ink-faint)" }}>
           Tasks the system extracted from sources you&apos;ve uploaded. Approve to convert
           into real tasks, or dismiss.
         </p>
@@ -37,7 +37,7 @@ export default async function CandidatesPage() {
         </article>
       ) : candidates.length === 0 ? (
         <article className="panel">
-          <p className="small" style={{ color: "var(--text-tertiary)" }}>
+          <p className="small" style={{ color: "var(--ink-faint)" }}>
             No suggested tasks. Upload a source to extract candidates.
           </p>
           <p className="small" style={{ marginTop: "0.4rem" }}>

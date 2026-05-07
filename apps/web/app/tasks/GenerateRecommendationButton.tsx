@@ -66,7 +66,7 @@ export default function GenerateRecommendationButton({
       {isGenerating ? (
         <p
           className="small"
-          style={{ color: "var(--text-tertiary)", fontStyle: "italic" }}
+          style={{ color: "var(--ink-faint)", fontStyle: "italic" }}
           aria-live="polite"
         >
           {TYPICAL_LATENCY_TEXT}

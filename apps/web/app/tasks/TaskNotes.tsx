@@ -53,12 +53,12 @@ export function TaskNotes({
       />
       {saving && <span className="small">Saving...</span>}
       {!saving && value.trim() !== saved && (
-        <span className="small" style={{ color: "var(--text-tertiary)" }}>
+        <span className="small" style={{ color: "var(--ink-faint)" }}>
           Unsaved changes
         </span>
       )}
       {!saving && value.trim() === saved && saved && (
-        <span className="small" style={{ color: "var(--text-tertiary)" }}>
+        <span className="small" style={{ color: "var(--ink-faint)" }}>
           Last saved <TimeDisplay iso={lastSavedAt} />
         </span>
       )}

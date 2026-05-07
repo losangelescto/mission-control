@@ -113,7 +113,7 @@ export function Obstacles({ taskId, initialObstacles }: Props) {
                     <article
                       key={`${o.id}-sol-${i}`}
                       className="panel"
-                      style={{ background: "var(--bg-base)" }}
+                      style={{ background: "var(--canvas)" }}
                     >
                       <div className="small" style={{ marginBottom: "0.375rem" }}>
                         <span className="badge">
@@ -123,7 +123,7 @@ export function Obstacles({ taskId, initialObstacles }: Props) {
                           className="small"
                           style={{
                             marginLeft: "0.375rem",
-                            color: "var(--text-tertiary)",
+                            color: "var(--ink-faint)",
                           }}
                         >
                           {s.source === "ai_generated" ? "AI" : "manual"}
@@ -150,7 +150,7 @@ export function Obstacles({ taskId, initialObstacles }: Props) {
                 </div>
               </>
             ) : (
-              <p className="small" style={{ color: "var(--text-tertiary)" }}>
+              <p className="small" style={{ color: "var(--ink-faint)" }}>
                 No proposed solutions yet. Click Analyze to generate three.
               </p>
             )}
@@ -187,7 +187,7 @@ export function Obstacles({ taskId, initialObstacles }: Props) {
             <span data-status="completed" style={{ marginRight: "0.5rem" }}>
               resolved
             </span>
-            <span style={{ color: "var(--text-tertiary)" }}>
+            <span style={{ color: "var(--ink-faint)" }}>
               {o.description}
             </span>
           </summary>
@@ -198,7 +198,7 @@ export function Obstacles({ taskId, initialObstacles }: Props) {
               </div>
             ) : null}
             {o.resolved_at ? (
-              <div className="small" style={{ color: "var(--text-tertiary)" }}>
+              <div className="small" style={{ color: "var(--ink-faint)" }}>
                 Resolved <TimeDisplay iso={o.resolved_at} format="date" />
               </div>
             ) : null}
@@ -212,13 +212,13 @@ export function Obstacles({ taskId, initialObstacles }: Props) {
     <div className="stack-sm">
       <div className="meta-row" style={{ justifyContent: "space-between" }}>
         <h3 style={{ margin: 0 }}>Obstacles</h3>
-        <span className="small" style={{ color: "var(--text-tertiary)" }}>
+        <span className="small" style={{ color: "var(--ink-faint)" }}>
           {active.length} active, {resolved.length} resolved
         </span>
       </div>
 
       {obstacles.length === 0 ? (
-        <p className="small" style={{ color: "var(--text-tertiary)" }}>
+        <p className="small" style={{ color: "var(--ink-faint)" }}>
           No obstacles recorded yet.
         </p>
       ) : (

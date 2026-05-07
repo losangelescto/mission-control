@@ -2,8 +2,8 @@
   --background: #fafafa;
   --foreground: #fff;
 
-  --text-primary: #000;
-  --text-secondary: #666;
+  --ink: #000;
+  --ink-soft: #666;
 
   --button-primary-hover: #383838;
   --button-secondary-hover: #f2f2f2;
@@ -45,7 +45,7 @@
   line-height: 48px;
   letter-spacing: -2.4px;
   text-wrap: balance;
-  color: var(--text-primary);
+  color: var(--ink);
 }
 
 .intro p {
@@ -53,12 +53,12 @@
   font-size: 18px;
   line-height: 32px;
   text-wrap: balance;
-  color: var(--text-secondary);
+  color: var(--ink-soft);
 }
 
 .intro a {
   font-weight: 500;
-  color: var(--text-primary);
+  color: var(--ink);
 }
 
 .ctas {
@@ -85,7 +85,7 @@
 }
 
 a.primary {
-  background: var(--text-primary);
+  background: var(--ink);
   color: var(--background);
   gap: 8px;
 }
@@ -132,8 +132,8 @@ a.secondary {
     --background: #000;
     --foreground: #000;
 
-    --text-primary: #ededed;
-    --text-secondary: #999;
+    --ink: #ededed;
+    --ink-soft: #999;
 
     --button-primary-hover: #ccc;
     --button-secondary-hover: #1a1a1a;

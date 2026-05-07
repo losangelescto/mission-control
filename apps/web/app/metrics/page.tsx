@@ -89,7 +89,7 @@ export default async function MetricsPage({ searchParams }: MetricsPageProps) {
           Co-equal standards that apply to every person. Rate 1–10.
         </p>
         {scores.filter((s) => s.metric_type === "standard").length === 0 && (
-          <p className="small" style={{ color: "var(--text-tertiary)" }}>
+          <p className="small" style={{ color: "var(--ink-faint)" }}>
             No standards scores recorded for this scope yet. Use the sliders below to begin.
           </p>
         )}
@@ -121,7 +121,7 @@ export default async function MetricsPage({ searchParams }: MetricsPageProps) {
           Qualitative diagnostics across every touchpoint. Rate 1–10.
         </p>
         {scores.filter((s) => s.metric_type === "signature").length === 0 && (
-          <p className="small" style={{ color: "var(--text-tertiary)" }}>
+          <p className="small" style={{ color: "var(--ink-faint)" }}>
             No signature scores recorded for this scope yet. Use the sliders below to begin.
           </p>
         )}

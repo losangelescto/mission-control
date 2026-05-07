@@ -255,7 +255,7 @@ export function ReviewSessionPanel({
                       key={u.id}
                       style={{
                         padding: "0.375rem 0",
-                        borderBottom: "1px solid var(--border)",
+                        borderBottom: "1px solid var(--line)",
                       }}
                     >
                       <div style={{ fontSize: "0.9375rem" }}>{u.summary}</div>
@@ -370,12 +370,12 @@ export function ReviewSessionPanel({
                   </div>
                 )}
                 {r.task_id && (
-                  <div className="small" style={{ marginTop: "0.125rem", color: "var(--text-tertiary)" }}>
+                  <div className="small" style={{ marginTop: "0.125rem", color: "var(--ink-faint)" }}>
                     Task #{r.task_id}
                   </div>
                 )}
                 {r.owner_name && !r.task_id && (
-                  <div className="small" style={{ marginTop: "0.125rem", color: "var(--text-tertiary)" }}>
+                  <div className="small" style={{ marginTop: "0.125rem", color: "var(--ink-faint)" }}>
                     Person: {r.owner_name}
                   </div>
                 )}

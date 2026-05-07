@@ -35,12 +35,15 @@ export default function CanonChangesBadge() {
   if (!count || count <= 0) return null;
   return (
     <span
-      className="badge"
       style={{
-        marginLeft: "0.4rem",
-        background: "#fee2e2",
-        color: "#991b1b",
-        fontSize: "0.7rem",
+        fontSize: 10,
+        color: "var(--brass)",
+        border: "1px solid var(--brass)",
+        padding: "1px 6px",
+        borderRadius: 2,
+        lineHeight: 1.2,
+        fontWeight: 600,
+        letterSpacing: "0.04em",
       }}
       aria-label={`${count} unreviewed canon changes`}
     >

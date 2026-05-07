@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { BigButton } from "@/app/components/BigButton";
 import { apiClient } from "@/lib/api/client";
 
 type Props = {
@@ -12,16 +13,15 @@ type Props = {
   label?: string;
 };
 
-// 16 -- not just spinning. The hint text turns the wait into a feature:
-// the model is reasoning over canon, task context, and resolved obstacles,
-// not returning a cached lookup. Keep this in sync with the API's typical
-// Anthropic latency.
+// Not just spinning — the hint text turns the wait into a feature: the model
+// is reasoning over canon, task context, and resolved obstacles, not returning
+// a cached lookup. Keep this in sync with the API's typical Anthropic latency.
 const TYPICAL_LATENCY_TEXT =
   "Anthropic is reasoning over canon, task context, and resolved obstacles. Typical response time: 10–20 seconds.";
 
 export default function GenerateRecommendationButton({
   taskId,
-  label = "Generate Recommendation",
+  label = "Generate recommendation",
 }: Props) {
   const router = useRouter();
   const [isGenerating, setIsGenerating] = useState(false);
@@ -45,35 +45,34 @@ export default function GenerateRecommendationButton({
   }
 
   return (
-    <div className="stack-sm">
-      <button
-        type="button"
-        className="link-btn"
-        onClick={onClick}
-        disabled={isGenerating}
-        aria-busy={isGenerating}
-        data-testid="generate-recommendation"
-      >
-        {isGenerating ? (
-          <>
-            <SpinnerIcon />
-            Generating…
-          </>
-        ) : (
-          label
-        )}
-      </button>
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
+      <span data-testid="generate-recommendation-wrapper">
+        <BigButton
+          kind="secondary"
+          onClick={onClick}
+          disabled={isGenerating}
+          ariaLabel={label}
+        >
+          {isGenerating ? (
+            <>
+              <SpinnerIcon />
+              Generating…
+            </>
+          ) : (
+            <span data-testid="generate-recommendation">{label}</span>
+          )}
+        </BigButton>
+      </span>
       {isGenerating ? (
         <p
-          className="small"
-          style={{ color: "var(--ink-faint)", fontStyle: "italic" }}
+          style={{ fontSize: 14, color: "var(--ink-faint)", fontStyle: "italic", margin: 0 }}
           aria-live="polite"
         >
           {TYPICAL_LATENCY_TEXT}
         </p>
       ) : null}
       {error ? (
-        <p className="small" role="alert" style={{ color: "#991b1b" }}>
+        <p style={{ fontSize: 14, color: "var(--danger)", margin: 0 }} role="alert">
           {error}
         </p>
       ) : null}
@@ -82,8 +81,8 @@ export default function GenerateRecommendationButton({
 }
 
 function SpinnerIcon() {
-  // Inline SVG so we don't pull in a new icon dependency. The CSS
-  // animation keyframes used here (`spin`) are defined in globals.css.
+  // Inline SVG so we don't pull in a new icon dependency. The CSS `spin`
+  // keyframe is defined in globals.css.
   return (
     <svg
       width="14"
@@ -96,7 +95,6 @@ function SpinnerIcon() {
       strokeLinejoin="round"
       aria-hidden="true"
       style={{
-        marginRight: "0.4rem",
         animation: "spin 0.9s linear infinite",
       }}
     >

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { BigButton } from "@/app/components/BigButton";
 import { PromptDialog } from "@/app/components/PromptDialog";
 import { TimeDisplay } from "@/app/components/TimeDisplay";
 import { Obstacle } from "@/lib/api/types";
@@ -13,6 +14,25 @@ type Props = {
   taskId: number;
   initialObstacles: Obstacle[];
 };
+
+// Small uppercase tone pill — distinct from the StatusPill primitive
+// because here we want a quieter inline marker, not a dotted badge.
+function ObstacleStatusPill({ resolved }: { resolved: boolean }) {
+  return (
+    <span
+      style={{
+        fontSize: 11,
+        fontWeight: 600,
+        letterSpacing: "0.12em",
+        textTransform: "uppercase",
+        color: resolved ? "var(--success)" : "var(--danger)",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {resolved ? "Resolved" : "Active"}
+    </span>
+  );
+}
 
 export function Obstacles({ taskId, initialObstacles }: Props) {
   const router = useRouter();
@@ -90,58 +110,84 @@ export function Obstacles({ taskId, initialObstacles }: Props) {
 
   function renderActive(o: Obstacle) {
     return (
-      <li key={o.id}>
+      <li
+        key={o.id}
+        style={{
+          background: "var(--surface)",
+          border: "2px solid var(--line)",
+          borderRadius: 8,
+          padding: "16px 20px",
+        }}
+      >
         <details open>
-          <summary>
-            <span data-status="blocked" style={{ marginRight: "0.5rem" }}>
-              active
+          <summary style={{ display: "flex", alignItems: "baseline", gap: 12, listStyle: "none", cursor: "pointer" }}>
+            <ObstacleStatusPill resolved={false} />
+            <span style={{ flex: 1, fontSize: 16, fontWeight: 500, color: "var(--ink)" }}>
+              {o.description}
             </span>
-            <strong>{o.description}</strong>
           </summary>
-          <div className="stack-sm" style={{ padding: "0.625rem 0.875rem" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, paddingTop: 14, marginTop: 8, borderTop: "1px solid var(--line)" }}>
             {o.impact ? (
-              <div className="small">
-                <strong>Impact:</strong> {o.impact}
+              <div style={{ fontSize: 14, color: "var(--ink-soft)" }}>
+                <strong style={{ color: "var(--ink)" }}>Impact:</strong> {o.impact}
               </div>
             ) : null}
 
             {o.proposed_solutions.length > 0 ? (
               <>
-                <h3 style={{ marginTop: "0.375rem" }}>Proposed solutions</h3>
-                <div className="grid cols-3">
+                <h4
+                  style={{
+                    fontFamily: "inherit",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    margin: "4px 0 0",
+                    color: "var(--ink-soft)",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
+                  }}
+                >
+                  Proposed solutions
+                </h4>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
                   {o.proposed_solutions.map((s, i) => (
                     <article
                       key={`${o.id}-sol-${i}`}
-                      className="panel"
-                      style={{ background: "var(--canvas)" }}
+                      style={{
+                        background: "var(--surface-raised)",
+                        border: "1px solid var(--line)",
+                        borderRadius: 6,
+                        padding: "12px 14px",
+                      }}
                     >
-                      <div className="small" style={{ marginBottom: "0.375rem" }}>
-                        <span className="badge">
-                          {s.aligned_standard || "—"}
-                        </span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
                         <span
-                          className="small"
                           style={{
-                            marginLeft: "0.375rem",
-                            color: "var(--ink-faint)",
+                            fontSize: 11,
+                            fontWeight: 600,
+                            letterSpacing: "0.04em",
+                            textTransform: "uppercase",
+                            color: "var(--brass-deep)",
+                            background: "color-mix(in oklch, var(--brass) 12%, transparent)",
+                            padding: "2px 8px",
+                            borderRadius: 999,
                           }}
                         >
-                          {s.source === "ai_generated" ? "AI" : "manual"}
+                          {s.aligned_standard || "—"}
+                        </span>
+                        <span style={{ fontSize: 11, color: "var(--ink-faint)", letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                          {s.source === "ai_generated" ? "AI" : "Manual"}
                         </span>
                       </div>
-                      <div className="small">
+                      <div style={{ fontSize: 14, color: "var(--ink)", marginBottom: 4 }}>
                         <strong>Solution:</strong> {s.solution}
                       </div>
                       {s.trade_off ? (
-                        <div className="small">
+                        <div style={{ fontSize: 14, color: "var(--ink-soft)", marginBottom: 4 }}>
                           <strong>Trade-off:</strong> {s.trade_off}
                         </div>
                       ) : null}
                       {s.first_step ? (
-                        <div
-                          className="small"
-                          style={{ marginTop: "0.375rem" }}
-                        >
+                        <div style={{ fontSize: 14, color: "var(--ink-soft)", marginTop: 6 }}>
                           <strong>First step:</strong> {s.first_step}
                         </div>
                       ) : null}
@@ -150,28 +196,26 @@ export function Obstacles({ taskId, initialObstacles }: Props) {
                 </div>
               </>
             ) : (
-              <p className="small" style={{ color: "var(--ink-faint)" }}>
+              <p style={{ fontSize: 14, color: "var(--ink-faint)", fontStyle: "italic", margin: 0 }}>
                 No proposed solutions yet. Click Analyze to generate three.
               </p>
             )}
 
-            <div className="cta-row">
-              <button
-                type="button"
-                className="link-btn"
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 4 }}>
+              <BigButton
+                kind="secondary"
                 onClick={() => analyze(o)}
                 disabled={busy !== null}
               >
-                {busy === `analyze-${o.id}` ? "Analyzing..." : "Analyze"}
-              </button>
-              <button
-                type="button"
+                {busy === `analyze-${o.id}` ? "Analyzing…" : "Analyze"}
+              </BigButton>
+              <BigButton
+                kind="secondary"
                 onClick={() => setResolving(o)}
                 disabled={busy !== null}
-                className="btn-secondary"
               >
-                {busy === `resolve-${o.id}` ? "Resolving..." : "Resolve"}
-              </button>
+                {busy === `resolve-${o.id}` ? "Resolving…" : "Resolve"}
+              </BigButton>
             </div>
           </div>
         </details>
@@ -181,24 +225,30 @@ export function Obstacles({ taskId, initialObstacles }: Props) {
 
   function renderResolved(o: Obstacle) {
     return (
-      <li key={o.id}>
+      <li
+        key={o.id}
+        style={{
+          background: "var(--surface)",
+          border: "1px solid var(--line)",
+          borderRadius: 8,
+          padding: "12px 18px",
+        }}
+      >
         <details>
-          <summary>
-            <span data-status="completed" style={{ marginRight: "0.5rem" }}>
-              resolved
-            </span>
-            <span style={{ color: "var(--ink-faint)" }}>
+          <summary style={{ display: "flex", alignItems: "baseline", gap: 12, listStyle: "none", cursor: "pointer" }}>
+            <ObstacleStatusPill resolved={true} />
+            <span style={{ flex: 1, fontSize: 15, color: "var(--ink-soft)" }}>
               {o.description}
             </span>
           </summary>
-          <div className="stack-sm" style={{ padding: "0.625rem 0.875rem" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingTop: 12, marginTop: 8, borderTop: "1px solid var(--line)" }}>
             {o.resolution_notes ? (
-              <div className="small">
+              <div style={{ fontSize: 14, color: "var(--ink)" }}>
                 <strong>Resolution:</strong> {o.resolution_notes}
               </div>
             ) : null}
             {o.resolved_at ? (
-              <div className="small" style={{ color: "var(--ink-faint)" }}>
+              <div style={{ fontSize: 13, color: "var(--ink-faint)" }}>
                 Resolved <TimeDisplay iso={o.resolved_at} format="date" />
               </div>
             ) : null}
@@ -209,20 +259,17 @@ export function Obstacles({ taskId, initialObstacles }: Props) {
   }
 
   return (
-    <div className="stack-sm">
-      <div className="meta-row" style={{ justifyContent: "space-between" }}>
-        <h3 style={{ margin: 0 }}>Obstacles</h3>
-        <span className="small" style={{ color: "var(--ink-faint)" }}>
-          {active.length} active, {resolved.length} resolved
-        </span>
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ fontSize: 13, color: "var(--ink-faint)" }}>
+        {active.length} active · {resolved.length} resolved
       </div>
 
       {obstacles.length === 0 ? (
-        <p className="small" style={{ color: "var(--ink-faint)" }}>
+        <p style={{ fontSize: 14, color: "var(--ink-faint)", fontStyle: "italic", margin: 0 }}>
           No obstacles recorded yet.
         </p>
       ) : (
-        <ul className="list">
+        <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 }}>
           {active.map(renderActive)}
           {resolved.map(renderResolved)}
         </ul>
@@ -256,7 +303,7 @@ export function Obstacles({ taskId, initialObstacles }: Props) {
       />
 
       {addOpen ? (
-        <form onSubmit={addObstacle} className="stack-sm">
+        <form onSubmit={addObstacle} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <input
             type="text"
             placeholder="What's blocking this task?"
@@ -270,33 +317,32 @@ export function Obstacles({ taskId, initialObstacles }: Props) {
             value={newImpact}
             onChange={(e) => setNewImpact(e.target.value)}
           />
-          <div className="cta-row">
-            <button
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <BigButton
+              kind="primary"
               type="submit"
-              className="link-btn"
               disabled={busy === "create" || !newDescription.trim()}
             >
-              {busy === "create" ? "Saving..." : "Add Obstacle"}
-            </button>
-            <button
-              type="button"
+              {busy === "create" ? "Saving…" : "Add obstacle"}
+            </BigButton>
+            <BigButton
+              kind="secondary"
               onClick={() => setAddOpen(false)}
-              className="btn-secondary"
             >
               Cancel
-            </button>
+            </BigButton>
           </div>
         </form>
       ) : (
-        <button
-          type="button"
-          className="link-btn"
-          onClick={() => setAddOpen(true)}
-          disabled={busy !== null}
-          style={{ alignSelf: "flex-start" }}
-        >
-          Add Obstacle
-        </button>
+        <div>
+          <BigButton
+            kind="secondary"
+            onClick={() => setAddOpen(true)}
+            disabled={busy !== null}
+          >
+            Add obstacle
+          </BigButton>
+        </div>
       )}
     </div>
   );

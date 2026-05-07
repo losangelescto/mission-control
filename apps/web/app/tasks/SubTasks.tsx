@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { BigButton } from "@/app/components/BigButton";
+import { BigCheckbox } from "@/app/components/BigCheckbox";
 import { ConfirmDialog } from "@/app/components/ConfirmDialog";
 import { SubTask, SubTaskDraft } from "@/lib/api/types";
 import { pickSelectedDrafts, toggleIndex } from "@/lib/subtask-drafts";
@@ -19,6 +21,20 @@ function nextStatus(status: SubTask["status"]): SubTask["status"] {
   if (status === "in_progress") return "completed";
   return "pending";
 }
+
+// Subtle status hint for in-progress / pending subtasks. Completed gets
+// strikethrough via the BigCheckbox label, so no extra pill needed there.
+const SUBTASK_STATUS_LABEL: Record<SubTask["status"], string> = {
+  pending: "Pending",
+  in_progress: "In progress",
+  completed: "Completed",
+};
+
+const SUBTASK_STATUS_TINT: Record<SubTask["status"], string> = {
+  pending: "var(--ink-faint)",
+  in_progress: "var(--success)",
+  completed: "var(--ink-faint)",
+};
 
 export function SubTasks({ taskId, initialSubTasks }: Props) {
   const router = useRouter();
@@ -142,159 +158,198 @@ export function SubTasks({ taskId, initialSubTasks }: Props) {
   }
 
   return (
-    <div className="stack-sm">
-      <div className="meta-row" style={{ justifyContent: "space-between" }}>
-        <h3 style={{ margin: 0 }}>Sub-Tasks</h3>
-        <span className="small" style={{ color: "var(--ink-faint)" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+        <span style={{ fontSize: 13, color: "var(--ink-faint)" }}>
           {total === 0 ? "None yet" : `${completed} of ${total} completed`}
         </span>
       </div>
 
       {subTasks.length > 0 ? (
-        <ul className="list">
-          {subTasks.map((s) => (
-            <li key={s.id}>
-              <div
+        <ul
+          style={{
+            listStyle: "none",
+            margin: 0,
+            padding: 0,
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+          }}
+        >
+          {subTasks.map((s) => {
+            const completedStep = s.status === "completed";
+            return (
+              <li
+                key={s.id}
                 style={{
                   display: "flex",
                   alignItems: "flex-start",
-                  gap: "0.5rem",
+                  gap: 14,
+                  padding: "12px 16px",
+                  background: "var(--surface)",
+                  border: "1px solid var(--line)",
+                  borderRadius: 6,
                 }}
               >
-                <input
-                  type="checkbox"
-                  checked={s.status === "completed"}
+                <BigCheckbox
+                  checked={completedStep}
                   onChange={() => toggleStatus(s)}
                   disabled={busy === `toggle-${s.id}`}
-                  style={{ marginTop: "0.25rem" }}
+                  label={
+                    <span
+                      style={{
+                        fontSize: 16,
+                        fontWeight: 500,
+                        color: completedStep ? "var(--ink-faint)" : "var(--ink)",
+                        textDecoration: completedStep ? "line-through" : "none",
+                      }}
+                    >
+                      {s.title}
+                    </span>
+                  }
                 />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: "0.9375rem" }}>
-                    {s.title}
-                  </div>
+                <div style={{ flex: 1, minWidth: 0, marginTop: 2 }}>
                   {s.description ? (
-                    <div className="small" style={{ marginTop: "0.25rem" }}>
+                    <div style={{ fontSize: 14, color: "var(--ink-soft)", marginTop: 4, marginLeft: 34 }}>
                       {s.description}
                     </div>
                   ) : null}
                   <div
-                    className="meta-row"
-                    style={{ marginTop: "0.375rem", flexWrap: "wrap" }}
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 10,
+                      marginTop: 6,
+                      marginLeft: 34,
+                      fontSize: 12,
+                      color: "var(--ink-faint)",
+                      letterSpacing: "0.04em",
+                      textTransform: "uppercase",
+                    }}
                   >
-                    <span data-status={s.status}>{s.status.replace("_", " ")}</span>
-                    {s.canon_reference ? (
-                      <span className="badge">{s.canon_reference}</span>
+                    {!completedStep ? (
+                      <span style={{ color: SUBTASK_STATUS_TINT[s.status] }}>
+                        {SUBTASK_STATUS_LABEL[s.status]}
+                      </span>
                     ) : null}
+                    {s.canon_reference ? <span>{s.canon_reference}</span> : null}
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setPendingDelete(s)}
                   disabled={busy === `delete-${s.id}`}
+                  aria-label={`Delete sub-task: ${s.title}`}
                   style={{
                     flexShrink: 0,
-                    padding: "0.25rem 0.5rem",
-                    minHeight: "auto",
-                    fontSize: "0.75rem",
+                    width: 28,
+                    height: 28,
+                    padding: 0,
                     background: "transparent",
-                    border: "1px solid var(--border-input)",
-                    borderRadius: "var(--radius)",
+                    border: "1px solid var(--line)",
+                    borderRadius: 3,
                     color: "var(--ink-faint)",
                     cursor: "pointer",
-                    width: "auto",
-                    height: "auto",
+                    fontSize: 16,
+                    lineHeight: 1,
+                    transition: "color 120ms ease, border-color 120ms ease",
                   }}
-                  aria-label="Delete sub-task"
                 >
                   ×
                 </button>
-              </div>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       ) : null}
 
       {drafts ? (
         <article
-          className="panel"
-          style={{ background: "var(--canvas)", padding: "0.875rem" }}
+          style={{
+            background: "var(--surface)",
+            border: "2px solid var(--brass)",
+            borderRadius: 8,
+            padding: "20px 22px",
+          }}
         >
-          <h3 style={{ marginBottom: "0.5rem" }}>
-            Generated preview ({drafts.length - deselectedDrafts.size} of {drafts.length} selected)
-          </h3>
-          <p className="small" style={{ marginBottom: "0.5rem", color: "var(--ink-faint)" }}>
+          <div style={{ fontSize: 16, fontWeight: 500, color: "var(--ink)", marginBottom: 4 }}>
+            Generated preview · {drafts.length - deselectedDrafts.size} of {drafts.length} selected
+          </div>
+          <p style={{ fontSize: 14, color: "var(--ink-soft)", margin: "0 0 12px" }}>
             Uncheck any draft you don&apos;t want before saving.
           </p>
-          <ul className="list">
+          <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
             {drafts.map((d, i) => {
               const selected = !deselectedDrafts.has(i);
               return (
-                <li key={`${d.title}-${i}`}>
-                  <label
-                    style={{
-                      display: "flex",
-                      gap: "0.5rem",
-                      alignItems: "flex-start",
-                      cursor: "pointer",
-                      opacity: selected ? 1 : 0.5,
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selected}
-                      onChange={() =>
-                        setDeselectedDrafts((prev) => toggleIndex(prev, i))
-                      }
-                      aria-label={`Include draft: ${d.title}`}
-                      style={{ marginTop: "0.25rem" }}
-                    />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: "0.9375rem" }}>
-                        {d.title}
-                      </div>
-                      {d.description ? (
-                        <div className="small" style={{ marginTop: "0.25rem" }}>
-                          {d.description}
-                        </div>
-                      ) : null}
-                      {d.canon_reference ? (
-                        <span className="badge" style={{ marginTop: "0.25rem" }}>
-                          {d.canon_reference}
+                <li
+                  key={`${d.title}-${i}`}
+                  style={{
+                    padding: "10px 14px",
+                    background: "var(--surface-raised)",
+                    border: "1px solid var(--line)",
+                    borderRadius: 6,
+                    opacity: selected ? 1 : 0.55,
+                    transition: "opacity 120ms ease",
+                  }}
+                >
+                  <BigCheckbox
+                    checked={selected}
+                    onChange={() => setDeselectedDrafts((prev) => toggleIndex(prev, i))}
+                    label={
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        <span style={{ fontSize: 15, fontWeight: 500, color: "var(--ink)" }}>
+                          {d.title}
                         </span>
-                      ) : null}
-                    </div>
-                  </label>
+                        {d.description ? (
+                          <span style={{ fontSize: 13, color: "var(--ink-soft)", fontWeight: 400 }}>
+                            {d.description}
+                          </span>
+                        ) : null}
+                        {d.canon_reference ? (
+                          <span
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 600,
+                              letterSpacing: "0.04em",
+                              textTransform: "uppercase",
+                              color: "var(--brass-deep)",
+                              marginTop: 2,
+                            }}
+                          >
+                            {d.canon_reference}
+                          </span>
+                        ) : null}
+                      </div>
+                    }
+                  />
                 </li>
               );
             })}
           </ul>
-          <div className="cta-row">
-            <button
-              type="button"
-              className="link-btn"
+          <div style={{ display: "flex", gap: 12, marginTop: 14, flexWrap: "wrap" }}>
+            <BigButton
+              kind="primary"
               onClick={saveAllDrafts}
               disabled={busy === "save-all" || drafts.length === deselectedDrafts.size}
             >
-              {busy === "save-all"
-                ? "Saving..."
-                : `Save ${drafts.length - deselectedDrafts.size}`}
-            </button>
-            <button
-              type="button"
+              {busy === "save-all" ? "Saving…" : `Save ${drafts.length - deselectedDrafts.size}`}
+            </BigButton>
+            <BigButton
+              kind="secondary"
               onClick={() => {
                 setDrafts(null);
                 setDeselectedDrafts(new Set());
               }}
-              className="btn-secondary"
             >
               Discard
-            </button>
+            </BigButton>
           </div>
         </article>
       ) : null}
 
       {addOpen ? (
-        <form onSubmit={addSubTask} className="stack-sm">
+        <form onSubmit={addSubTask} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <input
             type="text"
             placeholder="Title"
@@ -311,47 +366,45 @@ export function SubTasks({ taskId, initialSubTasks }: Props) {
           />
           <input
             type="text"
-            placeholder="Aligned Standard (e.g. Consistency)"
+            placeholder="Aligned standard (e.g. Consistency)"
             value={newCanonRef}
             onChange={(e) => setNewCanonRef(e.target.value)}
           />
-          <div className="cta-row">
-            <button
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <BigButton
+              kind="primary"
               type="submit"
-              className="link-btn"
               disabled={busy === "create" || !newTitle.trim()}
             >
-              {busy === "create" ? "Saving..." : "Add"}
-            </button>
-            <button
-              type="button"
+              {busy === "create" ? "Saving…" : "Add"}
+            </BigButton>
+            <BigButton
+              kind="secondary"
               onClick={() => setAddOpen(false)}
-              className="btn-secondary"
             >
               Cancel
-            </button>
+            </BigButton>
           </div>
         </form>
       ) : (
-        <div className="cta-row">
-          <button
-            type="button"
-            className="link-btn"
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <BigButton
+            kind="secondary"
             onClick={() => setAddOpen(true)}
             disabled={busy !== null}
           >
-            Add Sub-Task
-          </button>
-          <button
-            type="button"
+            Add sub-task
+          </BigButton>
+          <BigButton
+            kind="quiet"
             onClick={generate}
             disabled={busy !== null}
-            className="btn-secondary"
           >
-            {busy === "generate" ? "Generating..." : "Generate Sub-Tasks"}
-          </button>
+            {busy === "generate" ? "Generating…" : "Generate sub-tasks"}
+          </BigButton>
         </div>
       )}
+
       <ConfirmDialog
         isOpen={pendingDelete !== null}
         title="Delete sub-task?"

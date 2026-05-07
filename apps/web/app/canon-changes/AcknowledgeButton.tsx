@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { BigButton } from "@/app/components/BigButton";
 import { apiClient } from "@/lib/api/client";
 
 type Props = {
@@ -16,7 +17,26 @@ export default function AcknowledgeButton({ eventId, alreadyReviewed }: Props) {
   const [err, setErr] = useState<string | null>(null);
 
   if (alreadyReviewed) {
-    return <span className="badge">Acknowledged</span>;
+    return (
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "8px 16px",
+          fontSize: 13,
+          fontWeight: 600,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          color: "var(--ink-faint)",
+          border: "1px solid var(--line)",
+          borderRadius: 3,
+          background: "var(--surface)",
+        }}
+      >
+        Acknowledged
+      </span>
+    );
   }
 
   async function onClick() {
@@ -33,11 +53,13 @@ export default function AcknowledgeButton({ eventId, alreadyReviewed }: Props) {
   }
 
   return (
-    <span className="stack-sm">
-      <button type="button" className="link-btn" onClick={onClick} disabled={busy}>
+    <span style={{ display: "inline-flex", flexDirection: "column", gap: 6 }}>
+      <BigButton kind="primary" onClick={onClick} disabled={busy}>
         {busy ? "Acknowledging…" : "Acknowledge"}
-      </button>
-      {err ? <span className="small" style={{ color: "#991b1b" }}>{err}</span> : null}
+      </BigButton>
+      {err ? (
+        <span style={{ fontSize: 14, color: "var(--danger)" }}>{err}</span>
+      ) : null}
     </span>
   );
 }

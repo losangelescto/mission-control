@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { CloseDetailPanel } from "@/app/components/CloseDetailPanel";
 import { DetailSection } from "@/app/components/DetailSection";
 import { PageTitle } from "@/app/components/PageTitle";
 import { apiClient } from "@/lib/api/client";
@@ -123,9 +124,10 @@ export default async function SourcesPage({ searchParams }: SourcesPageProps) {
             return (
               <Link
                 key={source.id}
-                href={`/sources?source_id=${source.id}`}
+                href={isSelected ? "/sources" : `/sources?source_id=${source.id}`}
                 className="task-list-row"
                 data-selected={isSelected ? "true" : undefined}
+                aria-pressed={isSelected}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -190,8 +192,10 @@ export default async function SourcesPage({ searchParams }: SourcesPageProps) {
             borderRadius: 10,
             padding: "32px 36px",
             marginBottom: 32,
+            position: "relative",
           }}
         >
+          <CloseDetailPanel closeHref="/sources" />
           <h2
             className="serif"
             style={{

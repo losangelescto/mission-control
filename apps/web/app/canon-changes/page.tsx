@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { BigButton } from "@/app/components/BigButton";
+import { CloseDetailPanel } from "@/app/components/CloseDetailPanel";
 import { DetailSection } from "@/app/components/DetailSection";
 import { PageTitle } from "@/app/components/PageTitle";
 import { apiClient } from "@/lib/api/client";
@@ -76,9 +77,10 @@ export default async function CanonChangesPage({ searchParams }: PageProps) {
               return (
                 <Link
                   key={event.id}
-                  href={`/canon-changes?event_id=${event.id}`}
+                  href={isSelected ? "/canon-changes" : `/canon-changes?event_id=${event.id}`}
                   className="task-list-row"
                   data-selected={isSelected ? "true" : undefined}
+                  aria-pressed={isSelected}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -132,8 +134,11 @@ export default async function CanonChangesPage({ searchParams }: PageProps) {
                 border: `2px solid ${selected.reviewed ? "var(--line)" : "var(--brass)"}`,
                 borderRadius: 10,
                 padding: "32px 36px",
+                position: "relative",
               }}
             >
+              <CloseDetailPanel closeHref="/canon-changes" />
+
               <div
                 style={{
                   fontSize: 11,

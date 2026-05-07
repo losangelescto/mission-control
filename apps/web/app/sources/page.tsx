@@ -106,7 +106,7 @@ export default async function SourcesPage({ searchParams }: SourcesPageProps) {
               <div>
                 <strong>{sourceLabel(selectedSource)}</strong>
                 {sourceLabel(selectedSource) !== displayName(selectedSource.filename) ? (
-                  <span className="small" style={{ marginLeft: "0.5rem", color: "var(--text-tertiary)" }}>
+                  <span className="small" style={{ marginLeft: "0.5rem", color: "var(--ink-faint)" }}>
                     ({displayName(selectedSource.filename)})
                   </span>
                 ) : null}

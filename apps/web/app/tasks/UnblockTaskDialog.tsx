@@ -27,10 +27,10 @@ const OVERLAY: React.CSSProperties = {
 };
 
 const PANEL: React.CSSProperties = {
-  background: "var(--bg-base)",
-  color: "var(--text-primary)",
+  background: "var(--canvas)",
+  color: "var(--ink)",
   borderRadius: "var(--radius)",
-  border: "1px solid var(--border)",
+  border: "1px solid var(--line)",
   padding: "1.25rem",
   width: "100%",
   maxWidth: "32rem",
@@ -95,7 +95,7 @@ export function UnblockTaskDialog({ taskId, onClose, onUnblocked }: Props) {
         <h2 id="unblock-dialog-title" style={{ marginTop: 0 }}>
           Unblock Task
         </h2>
-        <p className="small" style={{ color: "var(--text-tertiary)" }}>
+        <p className="small" style={{ color: "var(--ink-faint)" }}>
           The resolution notes feed the next recommendation prompt — a clear
           note here lets the LLM build on what you just resolved instead of
           re-suggesting it.

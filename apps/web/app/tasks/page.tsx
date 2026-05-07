@@ -263,11 +263,11 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
           <article
             className="panel"
             style={{
-              borderLeft: "4px solid var(--red)",
+              borderLeft: "4px solid var(--danger)",
               background: "var(--red-dim)",
             }}
           >
-            <h2 style={{ color: "var(--red)" }}>Unblock Analysis</h2>
+            <h2 style={{ color: "var(--danger)" }}>Unblock Analysis</h2>
             <div className="stack-sm">
               <GenerateRecommendationButton
                 taskId={selectedTask.id}
@@ -287,7 +287,7 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
                   <article
                     key={`${alt.path}-${i}`}
                     className="panel"
-                    style={{ background: "var(--bg-base)" }}
+                    style={{ background: "var(--canvas)" }}
                   >
                     <h3>{alt.path}</h3>
                     <div className="small" style={{ marginBottom: "0.375rem" }}>
@@ -306,11 +306,11 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
                 <strong>Recommended path:</strong>
                 <span>{recommendation.unblock_analysis.recommended_path}</span>
               </div>
-              <div className="small" style={{ color: "var(--text-tertiary)" }}>
+              <div className="small" style={{ color: "var(--ink-faint)" }}>
                 <strong>Canon:</strong> {recommendation.unblock_analysis.canon_reference}
               </div>
               {recommendation.recommendation_context ? (
-                <div className="small" style={{ color: "var(--text-tertiary)" }}>
+                <div className="small" style={{ color: "var(--ink-faint)" }}>
                   Based on {recommendation.recommendation_context.canon_chunks_used} canon excerpts,{" "}
                   {recommendation.recommendation_context.updates_included} updates, and{" "}
                   {recommendation.recommendation_context.reviews_included} review notes.
@@ -343,7 +343,7 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
                     <strong>Next Action:</strong> {recommendation.next_action}
                   </div>
                   {recommendation.recommendation_context ? (
-                    <div className="small" style={{ color: "var(--text-tertiary)" }}>
+                    <div className="small" style={{ color: "var(--ink-faint)" }}>
                       Based on {recommendation.recommendation_context.canon_chunks_used} canon excerpts,{" "}
                       {recommendation.recommendation_context.updates_included} updates, and{" "}
                       {recommendation.recommendation_context.reviews_included} review notes.

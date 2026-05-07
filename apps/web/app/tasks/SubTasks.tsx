@@ -145,7 +145,7 @@ export function SubTasks({ taskId, initialSubTasks }: Props) {
     <div className="stack-sm">
       <div className="meta-row" style={{ justifyContent: "space-between" }}>
         <h3 style={{ margin: 0 }}>Sub-Tasks</h3>
-        <span className="small" style={{ color: "var(--text-tertiary)" }}>
+        <span className="small" style={{ color: "var(--ink-faint)" }}>
           {total === 0 ? "None yet" : `${completed} of ${total} completed`}
         </span>
       </div>
@@ -199,7 +199,7 @@ export function SubTasks({ taskId, initialSubTasks }: Props) {
                     background: "transparent",
                     border: "1px solid var(--border-input)",
                     borderRadius: "var(--radius)",
-                    color: "var(--text-tertiary)",
+                    color: "var(--ink-faint)",
                     cursor: "pointer",
                     width: "auto",
                     height: "auto",
@@ -217,12 +217,12 @@ export function SubTasks({ taskId, initialSubTasks }: Props) {
       {drafts ? (
         <article
           className="panel"
-          style={{ background: "var(--bg-base)", padding: "0.875rem" }}
+          style={{ background: "var(--canvas)", padding: "0.875rem" }}
         >
           <h3 style={{ marginBottom: "0.5rem" }}>
             Generated preview ({drafts.length - deselectedDrafts.size} of {drafts.length} selected)
           </h3>
-          <p className="small" style={{ marginBottom: "0.5rem", color: "var(--text-tertiary)" }}>
+          <p className="small" style={{ marginBottom: "0.5rem", color: "var(--ink-faint)" }}>
             Uncheck any draft you don&apos;t want before saving.
           </p>
           <ul className="list">

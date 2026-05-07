@@ -179,7 +179,7 @@ export function KanbanBoard({ initialTasks }: { initialTasks: Task[] }) {
                                 className="badge"
                                 style={{
                                   background: "var(--bg-hover)",
-                                  color: "var(--text-secondary)",
+                                  color: "var(--ink-soft)",
                                 }}
                               >
                                 {task.priority}

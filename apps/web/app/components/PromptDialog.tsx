@@ -14,10 +14,10 @@ const OVERLAY: React.CSSProperties = {
 };
 
 const PANEL: React.CSSProperties = {
-  background: "var(--bg-base)",
-  color: "var(--text-primary)",
+  background: "var(--canvas)",
+  color: "var(--ink)",
   borderRadius: "var(--radius)",
-  border: "1px solid var(--border)",
+  border: "1px solid var(--line)",
   padding: "1.25rem",
   width: "100%",
   maxWidth: "32rem",
@@ -115,7 +115,7 @@ export function PromptDialog({
           {title}
         </h2>
         {body ? (
-          <div className="small" style={{ color: "var(--text-tertiary)", marginBottom: "0.75rem" }}>
+          <div className="small" style={{ color: "var(--ink-faint)", marginBottom: "0.75rem" }}>
             {body}
           </div>
         ) : null}

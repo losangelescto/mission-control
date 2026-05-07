@@ -132,7 +132,7 @@ export default function UploadSource() {
       </label>
 
       <label className="stack-sm">
-        <span>Title <span className="small" style={{ color: "var(--text-tertiary)" }}>(optional)</span></span>
+        <span>Title <span className="small" style={{ color: "var(--ink-faint)" }}>(optional)</span></span>
         <input
           name="title"
           type="text"
@@ -215,7 +215,7 @@ export default function UploadSource() {
           Cancel
         </button>
       </div>
-      <p className="small" style={{ color: "var(--text-tertiary)" }}>
+      <p className="small" style={{ color: "var(--ink-faint)" }}>
         After upload, processing runs in the background — the source will appear in the list with a
         status badge that updates as it completes.
       </p>

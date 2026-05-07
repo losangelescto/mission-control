@@ -19,7 +19,7 @@ function priorityColor(priority: string | null): string {
     case "low":
       return "#0369a1";
     default:
-      return "var(--text-tertiary)";
+      return "var(--ink-faint)";
   }
 }
 
@@ -58,7 +58,7 @@ export function CandidateRow({ candidate }: { candidate: TaskCandidate }) {
 
   if (done) {
     return (
-      <li className="small" style={{ color: "var(--text-tertiary)" }} data-testid={`candidate-row-${candidate.id}`}>
+      <li className="small" style={{ color: "var(--ink-faint)" }} data-testid={`candidate-row-${candidate.id}`}>
         {done === "approved" ? "✓ Approved — added to Tasks." : "✕ Dismissed."}
       </li>
     );
@@ -69,7 +69,7 @@ export function CandidateRow({ candidate }: { candidate: TaskCandidate }) {
       <article
         className="panel"
         style={{
-          background: "var(--bg-elevated)",
+          background: "var(--surface-raised)",
           padding: "1rem",
           marginBottom: "0.75rem",
         }}
@@ -96,12 +96,12 @@ export function CandidateRow({ candidate }: { candidate: TaskCandidate }) {
                 <span className="badge">{candidate.canon_alignment}</span>
               ) : null}
               {candidate.inferred_owner_name ? (
-                <span className="small" style={{ color: "var(--text-tertiary)" }}>
+                <span className="small" style={{ color: "var(--ink-faint)" }}>
                   owner: {candidate.inferred_owner_name}
                 </span>
               ) : null}
               {confidencePct != null ? (
-                <span className="small" style={{ color: "var(--text-tertiary)" }}>
+                <span className="small" style={{ color: "var(--ink-faint)" }}>
                   confidence: {confidencePct}%
                 </span>
               ) : null}
@@ -112,7 +112,7 @@ export function CandidateRow({ candidate }: { candidate: TaskCandidate }) {
                 source #{candidate.source_document_id}
               </Link>
               {candidate.source_reference ? (
-                <span className="small" style={{ color: "var(--text-tertiary)" }}>
+                <span className="small" style={{ color: "var(--ink-faint)" }}>
                   &ldquo;{candidate.source_reference}&rdquo;
                 </span>
               ) : null}

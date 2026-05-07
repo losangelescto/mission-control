@@ -1,11 +1,9 @@
 import { apiClient } from "@/lib/api/client";
-import { flags } from "@/lib/flags";
 
 import { BigButton } from "../components/BigButton";
 import { PageTitle } from "../components/PageTitle";
 
 import { CalloutGroup } from "./CalloutGroup";
-import { KanbanBoard } from "./KanbanBoard";
 
 export default async function DashboardPage() {
   const tasks = await apiClient.getTasks();
@@ -14,21 +12,7 @@ export default async function DashboardPage() {
   const inProgress  = tasks.filter(t => t.status === "in_progress");
   const upNext      = tasks.filter(t => t.status === "up_next");
 
-  // The legacy 5-column kanban stays in code behind a build-time flag so it
-  // can be opted back in via NEXT_PUBLIC_ENABLE_KANBAN=true. Default is the
-  // v2 'Calm' callout-group view below.
-  if (flags.kanbanDashboard) {
-    return (
-      <div style={{ maxWidth: 1200 }}>
-        <PageTitle sub="Drag tasks between columns to change their status.">
-          Dashboard
-        </PageTitle>
-        <KanbanBoard initialTasks={tasks} />
-      </div>
-    );
-  }
-
-  // v2 view: editorial 3-group stack (blocked → in progress → up next).
+  // v2 'Calm' editorial 3-group stack (Blocked → In Progress → Up Next).
   // Each group hides itself when its list is empty.
   const subtitle = buildSubtitle({
     open: blocked.length + inProgress.length + upNext.length,

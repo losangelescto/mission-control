@@ -15,15 +15,6 @@ function flag(envValue: string | undefined): boolean {
 
 export const flags = {
   /**
-   * When true, the Dashboard route renders the legacy 5-column kanban
-   * (drag-to-change-status) instead of the v2 'Calm' callout-group view.
-   * The kanban is real, working UI that the v2 design replaces; we keep
-   * it accessible behind this flag rather than deleting the JSX so it
-   * stays one env var away from a rollback.
-   */
-  kanbanDashboard: flag(process.env.NEXT_PUBLIC_ENABLE_KANBAN),
-
-  /**
    * When true, the Tasks route shows the inline "Suggested Tasks —
    * Extracted from Sources" panel at the bottom of the page. v2 moves
    * this surface to the dedicated /tasks/candidates page; we keep the

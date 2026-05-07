@@ -1,43 +1,31 @@
-import Link from "next/link";
-
 import { apiClient } from "@/lib/api/client";
 
 import { BigButton } from "../components/BigButton";
 import { PageTitle } from "../components/PageTitle";
 
-import { CalloutGroup } from "./CalloutGroup";
+import { KanbanBoard } from "./KanbanBoard";
 
 export default async function DashboardPage() {
   const tasks = await apiClient.getTasks();
 
-  const blocked     = tasks.filter(t => t.status === "blocked");
-  const inProgress  = tasks.filter(t => t.status === "in_progress");
-  const upNext      = tasks.filter(t => t.status === "up_next");
-  const backlog     = tasks.filter(t => t.status === "backlog");
-  const completed   = tasks.filter(t => t.status === "completed");
+  // Subtitle reflects only the "active" flow (blocked + in_progress +
+  // up_next) since those are the buckets users come to /dashboard to act
+  // on. Completed and backlog count toward the kanban-vs-empty-state
+  // decision below, but not the editorial subtitle copy.
+  const blocked = tasks.filter(t => t.status === "blocked").length;
+  const activeOpen =
+    tasks.filter(t => t.status === "blocked").length +
+    tasks.filter(t => t.status === "in_progress").length +
+    tasks.filter(t => t.status === "up_next").length;
+  const subtitle = buildSubtitle({ open: activeOpen, blocked });
 
-  const activeOpen = blocked.length + inProgress.length + upNext.length;
-
-  // v2 'Calm' editorial 3-group stack (Blocked → In Progress → Up Next).
-  // Each group hides itself when its list is empty.
-  const subtitle = buildSubtitle({
-    open: activeOpen,
-    blocked: blocked.length,
-  });
-
-  return (
-    <div>
-      <PageTitle sub={subtitle}>Today</PageTitle>
-
-      <CalloutGroup title="Blocked"     tone="danger"  tasks={blocked} />
-      <CalloutGroup title="In Progress"                tasks={inProgress} />
-      <CalloutGroup title="Up Next"                    tasks={upNext} />
-
-      {/* Empty state — when no tasks are in the three active buckets the
-          page would otherwise be blank. Show a single calm card with a
-          create CTA, plus links to backlog / completed if either has
-          tasks (so users can find the data they know exists). */}
-      {activeOpen === 0 ? (
+  // Empty state owns the page only when there are zero tasks across all
+  // five statuses. If anything exists in any column the kanban renders;
+  // empty columns just render the "No tasks" italic placeholder.
+  if (tasks.length === 0) {
+    return (
+      <div>
+        <PageTitle sub="Quiet day. Create a task to get started.">Today</PageTitle>
         <article
           style={{
             background: "var(--surface)",
@@ -57,54 +45,26 @@ export default async function DashboardPage() {
               margin: "0 0 18px",
             }}
           >
-            No active tasks right now.
+            No tasks yet.
           </p>
           <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
             <BigButton kind="primary" href="/tasks/new">Create a task</BigButton>
           </div>
-          {backlog.length + completed.length > 0 ? (
-            <div
-              style={{
-                marginTop: 18,
-                fontSize: 14,
-                color: "var(--ink-faint)",
-                display: "flex",
-                gap: 16,
-                justifyContent: "center",
-                flexWrap: "wrap",
-              }}
-            >
-              {backlog.length > 0 ? (
-                <Link href="/tasks?status=backlog" style={{ color: "var(--brass)" }}>
-                  {backlog.length} in backlog →
-                </Link>
-              ) : null}
-              {completed.length > 0 ? (
-                <Link href="/tasks?status=completed" style={{ color: "var(--brass)" }}>
-                  {completed.length} completed →
-                </Link>
-              ) : null}
-            </div>
-          ) : null}
         </article>
-      ) : null}
+      </div>
+    );
+  }
 
-      {/* "Show Completed" only appears when there's actual completed work
-          AND there's active work above it; otherwise the empty state owns
-          the affordance. */}
-      {activeOpen > 0 && completed.length > 0 ? (
-        <div style={{ marginTop: 32 }}>
-          <BigButton kind="secondary" href="/tasks?status=completed">
-            Show Completed
-          </BigButton>
-        </div>
-      ) : null}
+  return (
+    <div>
+      <PageTitle sub={subtitle}>Today</PageTitle>
+      <KanbanBoard initialTasks={tasks} />
     </div>
   );
 }
 
 function buildSubtitle({ open, blocked }: { open: number; blocked: number }): string {
-  if (open === 0) return "Nothing on the active board. Backlog and completed work live in Tasks.";
+  if (open === 0) return "Nothing active. Drag a backlog card up to get started.";
   const parts: string[] = [];
   parts.push(open === 1 ? "One open thread." : `${open} open threads.`);
   if (blocked > 0) parts.push(blocked === 1 ? "One blocked." : `${blocked} blocked.`);

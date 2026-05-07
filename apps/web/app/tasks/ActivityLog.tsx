@@ -29,7 +29,13 @@ const ENTITY_LABEL: Record<string, string> = {
 };
 
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleString();
+  return new Date(iso).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function describe(event: AuditEvent): string {
@@ -59,24 +65,48 @@ type Props = {
 export default function ActivityLog({ events }: Props) {
   if (events.length === 0) {
     return (
-      <details>
-        <summary>Activity Log</summary>
-        <p className="small">No activity recorded yet.</p>
-      </details>
+      <p style={{ fontSize: 14, color: "var(--ink-faint)", fontStyle: "italic", margin: 0 }}>
+        No activity recorded yet.
+      </p>
     );
   }
   return (
     <details>
-      <summary>Activity Log ({events.length})</summary>
-      <ul className="list" style={{ marginTop: "0.5rem" }}>
+      <summary style={{ fontSize: 14, color: "var(--ink-soft)" }}>
+        Show full log · {events.length}
+      </summary>
+      <ul
+        style={{
+          listStyle: "none",
+          margin: "12px 0 0",
+          padding: 0,
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+        }}
+      >
         {events.map((event) => (
-          <li key={event.id}>
-            <div style={{ display: "flex", alignItems: "baseline", gap: "0.5rem" }}>
-              <span aria-hidden="true">{ACTION_ICON[event.action] ?? "·"}</span>
-              <strong style={{ flex: 1 }}>{describe(event)}</strong>
-              <span className="small">{formatTime(event.created_at)}</span>
+          <li
+            key={event.id}
+            style={{
+              padding: "10px 14px",
+              background: "var(--surface)",
+              border: "1px solid var(--line)",
+              borderRadius: 6,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+              <span aria-hidden="true" style={{ color: "var(--ink-faint)", flexShrink: 0 }}>
+                {ACTION_ICON[event.action] ?? "·"}
+              </span>
+              <strong style={{ flex: 1, fontSize: 14, color: "var(--ink)" }}>
+                {describe(event)}
+              </strong>
+              <span style={{ fontSize: 12, color: "var(--ink-faint)", flexShrink: 0 }}>
+                {formatTime(event.created_at)}
+              </span>
             </div>
-            <div className="small" style={{ marginLeft: "1.5rem" }}>
+            <div style={{ fontSize: 12, color: "var(--ink-soft)", marginLeft: 22, marginTop: 2 }}>
               by {event.actor}
               {event.changes && Object.keys(event.changes).length > 0 ? (
                 <span> · {Object.keys(event.changes).join(", ")}</span>

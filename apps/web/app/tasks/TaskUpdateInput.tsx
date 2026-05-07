@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { BigButton } from "@/app/components/BigButton";
 import { TimeDisplay } from "@/app/components/TimeDisplay";
 import { TaskUpdate } from "@/lib/api/types";
 
@@ -48,39 +49,54 @@ export function TaskUpdateInput({
   }
 
   return (
-    <div className="stack-sm">
-      <h3>Updates</h3>
-      <form onSubmit={handleSubmit} className="stack-sm">
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <textarea
           className="task-notes-input"
           rows={2}
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Add an update..."
+          placeholder="Add an update…"
         />
         <div>
-          <button
+          <BigButton
+            kind="secondary"
             type="submit"
-            className="link-btn"
             disabled={submitting || !text.trim()}
-            style={{ opacity: submitting || !text.trim() ? 0.5 : 1 }}
           >
-            {submitting ? "Posting..." : "Post Update"}
-          </button>
+            {submitting ? "Posting…" : "Post update"}
+          </BigButton>
         </div>
       </form>
-      {updates.length > 0 && (
-        <ul className="list">
+      {updates.length > 0 ? (
+        <ul
+          style={{
+            listStyle: "none",
+            margin: 0,
+            padding: 0,
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+          }}
+        >
           {updates.map((u) => (
-            <li key={u.id}>
-              <div style={{ fontSize: "0.9375rem" }}>{u.summary}</div>
-              <div className="small" style={{ marginTop: "0.125rem" }}>
-                {u.created_by} &middot; <TimeDisplay iso={u.created_at} />
+            <li
+              key={u.id}
+              style={{
+                padding: "12px 16px",
+                background: "var(--surface)",
+                border: "1px solid var(--line)",
+                borderRadius: 6,
+              }}
+            >
+              <div style={{ fontSize: 15, color: "var(--ink)", lineHeight: 1.5 }}>{u.summary}</div>
+              <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 4 }}>
+                {u.created_by} · <TimeDisplay iso={u.created_at} />
               </div>
             </li>
           ))}
         </ul>
-      )}
+      ) : null}
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { BigButton } from "@/app/components/BigButton";
 import { apiClient } from "@/lib/api/client";
 import {
   BLOCKER_TYPES,
@@ -18,7 +19,8 @@ type Props = {
 const OVERLAY: React.CSSProperties = {
   position: "fixed",
   inset: 0,
-  background: "rgba(0,0,0,0.45)",
+  background: "rgba(15, 13, 10, 0.4)",
+  backdropFilter: "blur(2px)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -27,14 +29,14 @@ const OVERLAY: React.CSSProperties = {
 };
 
 const PANEL: React.CSSProperties = {
-  background: "var(--canvas)",
+  background: "var(--surface-raised)",
   color: "var(--ink)",
-  borderRadius: "var(--radius)",
-  border: "1px solid var(--line)",
-  padding: "1.25rem",
+  borderRadius: 10,
+  border: "2px solid var(--line)",
+  padding: "28px 30px",
   width: "100%",
   maxWidth: "32rem",
-  boxShadow: "0 12px 40px rgba(0,0,0,0.35)",
+  boxShadow: "var(--shadow-md)",
 };
 
 export function BlockTaskDialog({ taskId, onClose, onBlocked }: Props) {
@@ -115,7 +117,7 @@ export function BlockTaskDialog({ taskId, onClose, onBlocked }: Props) {
               ))}
             </select>
             {errors.blocker_type ? (
-              <span className="small" style={{ color: "#991b1b" }}>
+              <span className="small" style={{ color: "var(--danger)" }}>
                 {errors.blocker_type}
               </span>
             ) : null}
@@ -138,7 +140,7 @@ export function BlockTaskDialog({ taskId, onClose, onBlocked }: Props) {
               maxLength={1000}
             />
             {errors.blocker_reason ? (
-              <span className="small" style={{ color: "#991b1b" }}>
+              <span className="small" style={{ color: "var(--danger)" }}>
                 {errors.blocker_reason}
               </span>
             ) : null}
@@ -159,36 +161,37 @@ export function BlockTaskDialog({ taskId, onClose, onBlocked }: Props) {
               ))}
             </select>
             {errors.severity ? (
-              <span className="small" style={{ color: "#991b1b" }}>
+              <span className="small" style={{ color: "var(--danger)" }}>
                 {errors.severity}
               </span>
             ) : null}
           </label>
 
           {serverError ? (
-            <p className="small" style={{ color: "#991b1b" }}>
+            <p className="small" style={{ color: "var(--danger)" }}>
               {serverError}
             </p>
           ) : null}
 
-          <div className="cta-row">
-            <button
+          <div style={{ display: "flex", gap: 12, marginTop: 14, flexWrap: "wrap" }}>
+            <BigButton
+              kind="primary"
               type="submit"
-              className="link-btn"
               disabled={submitting || !blockerReason.trim()}
-              data-testid="block-submit"
+              ariaLabel="Block this task"
             >
-              {submitting ? "Blocking…" : "Block Task"}
-            </button>
-            <button
-              type="button"
+              <span data-testid="block-submit">
+                {submitting ? "Blocking…" : "Block task"}
+              </span>
+            </BigButton>
+            <BigButton
+              kind="secondary"
               onClick={onClose}
               disabled={submitting}
-              className="btn-secondary"
-              data-testid="block-cancel"
+              ariaLabel="Cancel block dialog"
             >
-              Cancel
-            </button>
+              <span data-testid="block-cancel">Cancel</span>
+            </BigButton>
           </div>
         </form>
       </div>

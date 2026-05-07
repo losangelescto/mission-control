@@ -3,6 +3,8 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { BigButton } from "@/app/components/BigButton";
+
 import { BlockTaskDialog } from "./BlockTaskDialog";
 import { UnblockTaskDialog } from "./UnblockTaskDialog";
 
@@ -58,12 +60,16 @@ export function TaskStatusSelect({
   }
 
   return (
-    <div className="small" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-      <span>Status:</span>
+    <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
       <select
         value={status}
         onChange={onChange}
-        style={{ height: "auto", width: "auto", padding: "0.2rem 0.4rem", fontSize: "0.875rem" }}
+        style={{
+          height: "auto",
+          width: "auto",
+          padding: "8px 14px",
+          fontSize: 15,
+        }}
         data-testid="task-status-select"
       >
         {STATUSES.map((s) => (
@@ -74,20 +80,15 @@ export function TaskStatusSelect({
       </select>
 
       {initialStatus === "blocked" ? (
-        <button
-          type="button"
-          onClick={() => setUnblockDialogOpen(true)}
-          className="link-btn"
-          style={{
-            padding: "0.25rem 0.6rem",
-            height: "auto",
-            fontSize: "0.8125rem",
-            width: "auto",
-          }}
-          data-testid="open-unblock-dialog"
-        >
-          Unblock…
-        </button>
+        <span data-testid="open-unblock-dialog-wrapper">
+          <BigButton
+            kind="secondary"
+            onClick={() => setUnblockDialogOpen(true)}
+            ariaLabel="Open unblock dialog"
+          >
+            <span data-testid="open-unblock-dialog">Unblock…</span>
+          </BigButton>
+        </span>
       ) : null}
 
       {blockDialogOpen ? (

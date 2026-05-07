@@ -38,3 +38,6 @@ docker-compose.override.yml
 # ─── Application data ──────────────────────────────────────
 apps/api/data/
 data/
+
+# ─── UI design references (never commit) ───────────────────
+ui-update/

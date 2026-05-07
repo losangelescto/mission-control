@@ -123,8 +123,16 @@ export default function SearchBar() {
           }}
           onFocus={() => setOpen(true)}
           aria-label="Search Mission Control"
+          // ARIA combobox pattern: aria-expanded + aria-controls + aria-
+          // autocomplete are valid on role="combobox", not on the implicit
+          // textbox role of <input>. Setting role="combobox" lifts the
+          // jsx-a11y/role-supports-aria-props warning and matches the
+          // listbox below.
+          role="combobox"
           aria-autocomplete="list"
           aria-expanded={showDropdown}
+          aria-haspopup="listbox"
+          aria-controls="search-bar-listbox"
           style={{
             width: "100%",
             padding: "0.4rem 0.6rem",
@@ -169,6 +177,7 @@ export default function SearchBar() {
 
           {hasResults ? (
             <ul
+              id="search-bar-listbox"
               role="listbox"
               aria-label="Search results"
               style={{ listStyle: "none", margin: 0, padding: 0 }}

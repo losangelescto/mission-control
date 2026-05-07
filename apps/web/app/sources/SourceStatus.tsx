@@ -15,12 +15,14 @@ const TERMINAL_STATES = new Set<SourceProcessingState>([
   "failed",
 ]);
 
+// Background = soft tint of the foreground token (color-mix at ~14%) so
+// each state reads at a glance without leaving the v2 'Calm' palette.
 const BADGE_STYLES: Record<SourceProcessingState, { bg: string; fg: string }> = {
-  queued: { bg: "#e5e7eb", fg: "#374151" },
-  processing: { bg: "#dbeafe", fg: "#1e40af" },
-  partial: { bg: "#fef3c7", fg: "#92400e" },
-  complete: { bg: "#d1fae5", fg: "#065f46" },
-  failed: { bg: "#fee2e2", fg: "#991b1b" },
+  queued:     { bg: "color-mix(in oklch, var(--ink-faint) 14%, transparent)", fg: "var(--ink-soft)" },
+  processing: { bg: "color-mix(in oklch, var(--bronze) 14%, transparent)",    fg: "var(--bronze)"   },
+  partial:    { bg: "color-mix(in oklch, var(--warning) 14%, transparent)",   fg: "var(--warning)"  },
+  complete:   { bg: "color-mix(in oklch, var(--success) 14%, transparent)",   fg: "var(--success)"  },
+  failed:     { bg: "color-mix(in oklch, var(--danger) 14%, transparent)",    fg: "var(--danger)"   },
 };
 
 const BADGE_LABELS: Record<SourceProcessingState, string> = {
@@ -75,12 +77,12 @@ export default function SourceStatus({ sourceId, initial }: Props) {
         {progressLabel ? <span className="small"> · {progressLabel}</span> : null}
       </div>
       {state === "failed" && status.processing_error ? (
-        <div className="small" style={{ color: "#991b1b" }}>
+        <div className="small" style={{ color: "var(--danger)" }}>
           {status.processing_error}
         </div>
       ) : null}
       {state === "partial" && status.processing_error ? (
-        <div className="small" style={{ color: "#92400e" }}>
+        <div className="small" style={{ color: "var(--warning)" }}>
           {status.processing_error}
         </div>
       ) : null}

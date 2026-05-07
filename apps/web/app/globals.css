@@ -74,30 +74,6 @@
   --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.6);
 }
 
-/* ─── Legacy aliases — derived from v2 tokens ────────────
-   Tokens kept here so existing consumers continue to resolve.
-   A future cleanup PR will inline-rationalize them.            */
-:root {
-  --bg-hover:      color-mix(in oklch, var(--brass) 8%, transparent);
-  --border-input:  var(--line);
-  --topbar-bg:     var(--canvas);
-  --topbar-border: var(--line);
-
-  --green-hover:   color-mix(in oklch, var(--brass) 88%, white);
-  --green-active:  color-mix(in oklch, var(--brass) 78%, black);
-  --green-dim:     color-mix(in oklch, var(--brass) 14%, transparent);
-
-  --red-dim:       color-mix(in oklch, var(--danger) 14%, transparent);
-  --yellow-dim:    color-mix(in oklch, var(--warning) 14%, transparent);
-
-  --cyan:          var(--success);
-  --cyan-dim:      color-mix(in oklch, var(--success) 14%, transparent);
-  --orange:        var(--warning);
-  --orange-dim:    color-mix(in oklch, var(--warning) 14%, transparent);
-
-  --focus-ring:    0 0 0 2px color-mix(in oklch, var(--brass) 32%, transparent);
-}
-
 /* ─── Reset ──────────────────────────────────────────────── */
 
 *,
@@ -478,7 +454,7 @@ h3 {
 }
 
 .list li:hover {
-  background-color: var(--bg-hover);
+  background-color: color-mix(in oklch, var(--brass) 8%, transparent);
 }
 
 .list li a {
@@ -531,15 +507,15 @@ h3 {
 }
 
 /* Semantic stat colors via data attribute on panel */
-[data-category="urgent"]          .stat-count { color: var(--orange); }
+[data-category="urgent"]          .stat-count { color: var(--warning); }
 [data-category="blocked"]         .stat-count { color: var(--danger);    }
 [data-category="stale"]           .stat-count { color: var(--warning); }
 [data-category="due-soon"]        .stat-count { color: var(--warning); }
-[data-category="recurring-due"]   .stat-count { color: var(--cyan);   }
-[data-category="candidate-review"].stat-count { color: var(--cyan);   }
+[data-category="recurring-due"]   .stat-count { color: var(--success);   }
+[data-category="candidate-review"].stat-count { color: var(--success);   }
 
 /* Semantic section header colors via data attribute on panel */
-[data-section="urgent"]   h2 { color: var(--orange); }
+[data-section="urgent"]   h2 { color: var(--warning); }
 [data-section="blocked"]  h2 { color: var(--danger);    }
 [data-section="stale"]    h2 { color: var(--warning); }
 [data-section="due-soon"] h2 { color: var(--warning); }
@@ -557,7 +533,7 @@ h3 {
   text-transform: uppercase;
   white-space: nowrap;
   /* Default: green (active canon) */
-  background: var(--green-dim);
+  background: color-mix(in oklch, var(--brass) 14%, transparent);
   color: var(--brass);
 }
 
@@ -572,16 +548,16 @@ h3 {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   white-space: nowrap;
-  background: var(--bg-hover);
+  background: color-mix(in oklch, var(--brass) 8%, transparent);
   color: var(--ink-soft);
 }
 
-[data-status="blocked"]     { background: var(--red-dim);    color: var(--danger);    }
-[data-status="urgent"]      { background: var(--orange-dim); color: var(--orange); }
-[data-status="in_progress"] { background: var(--cyan-dim);   color: var(--cyan);   }
-[data-status="up_next"]     { background: var(--yellow-dim); color: var(--warning); }
-[data-status="completed"]   { background: var(--green-dim);  color: var(--brass);  }
-[data-status="backlog"]     { background: var(--bg-hover); color: var(--ink-soft); }
+[data-status="blocked"]     { background: color-mix(in oklch, var(--danger) 14%, transparent);    color: var(--danger);    }
+[data-status="urgent"]      { background: color-mix(in oklch, var(--warning) 14%, transparent); color: var(--warning); }
+[data-status="in_progress"] { background: color-mix(in oklch, var(--success) 14%, transparent);   color: var(--success);   }
+[data-status="up_next"]     { background: color-mix(in oklch, var(--warning) 14%, transparent); color: var(--warning); }
+[data-status="completed"]   { background: color-mix(in oklch, var(--brass) 14%, transparent);  color: var(--brass);  }
+[data-status="backlog"]     { background: color-mix(in oklch, var(--brass) 8%, transparent); color: var(--ink-soft); }
 
 /* Kanban CSS removed in Phase 4c — KanbanBoard.tsx and the legacy
    5-column dashboard are gone. The v2 callout-group view is the only
@@ -612,12 +588,12 @@ h3 {
 }
 
 .link-btn:hover {
-  background: var(--green-hover);
+  background: color-mix(in oklch, var(--brass) 88%, white);
   box-shadow: 0 0 12px color-mix(in oklch, var(--brass) 32%, transparent);
 }
 
 .link-btn:active {
-  background: var(--green-active);
+  background: color-mix(in oklch, var(--brass) 78%, black);
   box-shadow: none;
 }
 
@@ -637,7 +613,7 @@ h3 {
   gap: 0.375rem;
   background: transparent;
   color: var(--ink-soft);
-  border: 1px solid var(--border-input);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 0.75rem 1.5rem;
   font-size: 0.9375rem;
@@ -652,7 +628,7 @@ h3 {
 }
 
 .btn-secondary:hover {
-  background: var(--bg-hover);
+  background: color-mix(in oklch, var(--brass) 8%, transparent);
   border-color: var(--line-strong);
 }
 
@@ -714,7 +690,7 @@ textarea {
   width: 100%;
   height: 46px;
   padding: 0 0.875rem;
-  border: 1px solid var(--border-input);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   font-size: 0.9375rem;
   font-family: inherit;
@@ -730,7 +706,7 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus,
 select:focus,
 textarea:focus {
   border-color: var(--brass);
-  box-shadow: var(--focus-ring);
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--brass) 32%, transparent);
 }
 
 input:not([type="checkbox"]):not([type="radio"])::placeholder,
@@ -796,7 +772,7 @@ select {
   gap: 0.5rem;
   padding: 0 1rem;
   height: 46px;
-  border: 1px solid var(--border-input);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface-inset);
   color: var(--ink);
@@ -809,7 +785,7 @@ select {
 }
 
 .file-input-trigger:hover {
-  background: var(--bg-hover);
+  background: color-mix(in oklch, var(--brass) 8%, transparent);
 }
 
 .file-input-row {
@@ -852,7 +828,7 @@ summary {
 
 summary:hover {
   color: var(--ink);
-  background-color: var(--bg-hover);
+  background-color: color-mix(in oklch, var(--brass) 8%, transparent);
 }
 
 details[open] summary {
@@ -913,11 +889,11 @@ tbody tr {
 
 /* Subtle alternating rows */
 tbody tr:nth-child(even) {
-  background-color: var(--bg-hover);
+  background-color: color-mix(in oklch, var(--brass) 8%, transparent);
 }
 
 tbody tr:hover {
-  background-color: var(--bg-hover);
+  background-color: color-mix(in oklch, var(--brass) 8%, transparent);
 }
 
 tbody tr:last-child td {
